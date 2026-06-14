@@ -11,11 +11,6 @@ const sections = [
     description: "Manage your digital garage and vehicles in one place.",
     href: "/garage",
   },
-  {
-    title: "Vehicle",
-    description: "Open a vehicle profile and track build history.",
-    href: "/vehicle",
-  },
 ];
 
 export default function Home() {
