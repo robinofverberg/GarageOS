@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: garageos-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: garageos
+      POSTGRES_USER: garageos
+      POSTGRES_PASSWORD: garageos
+    ports:
+      - "5432:5432"
+    volumes:
+      - garageos-postgres:/var/lib/postgresql/data
+
+volumes:
+  garageos-postgres:

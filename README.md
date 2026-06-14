@@ -6,6 +6,14 @@ GarageOS is a platform for automotive enthusiasts to manage, document, showcase,
 
 Whether you own a completely stock daily driver, a weekend track car, a drift build, a restoration project, or an entire collection, GarageOS provides a single place to manage it all.
 
+## Local database setup
+
+1. Copy `.env.example` to `.env` and set `DATABASE_URL`.
+2. Start PostgreSQL with `docker compose up -d postgres`.
+3. Apply migrations with `npm run db:migrate`.
+4. Seed demo data with `npm run db:seed`.
+5. Start the app with `npm run dev`.
+
 ---
 
 ## Why GarageOS?

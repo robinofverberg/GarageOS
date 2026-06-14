@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { vehicles, getGarageStats } from "@/lib/mock-data";
+import { getGarageOverview } from "@/lib/garage-data";
 
-export default function GaragePage() {
-  const stats = getGarageStats();
+export default async function GaragePage() {
+  const { stats, vehicles } = await getGarageOverview();
 
   return (
     <div className="space-y-10">
@@ -25,7 +25,7 @@ export default function GaragePage() {
             { label: "Vehicles", value: stats.totalVehicles },
             { label: "Modifications", value: stats.totalModifications },
             { label: "Maintenance Records", value: stats.totalMaintenanceRecords },
-            { label: "Oldest Vehicle", value: stats.oldestVehicleYear },
+            { label: "Oldest Vehicle", value: stats.oldestVehicleYear ?? "—" },
           ].map(({ label, value }) => (
             <div
               key={label}
@@ -42,29 +42,40 @@ export default function GaragePage() {
         <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-slate-400">
           Vehicles
         </h2>
-        <div className="space-y-3">
-          {vehicles.map((vehicle) => (
-            <Link
-              key={vehicle.id}
-              href={`/vehicle/${vehicle.id}`}
-              className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 p-5 transition hover:border-slate-700 hover:bg-slate-800"
-            >
-              <div>
-                <p className="font-semibold text-white">
-                  {vehicle.year} {vehicle.make} {vehicle.model}
-                  {vehicle.trim ? ` ${vehicle.trim}` : ""}
-                </p>
-                <p className="mt-1 text-sm text-slate-400">
-                  {vehicle.color} &middot; {vehicle.mileage.toLocaleString()} mi
-                </p>
-              </div>
-              <div className="text-right text-sm text-slate-400">
-                <p>{vehicle.modifications.length} mod{vehicle.modifications.length !== 1 ? "s" : ""}</p>
-                <p>{vehicle.maintenanceHistory.length} service{vehicle.maintenanceHistory.length !== 1 ? "s" : ""}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
+        {vehicles.length === 0 ? (
+          <p className="text-sm text-slate-500">No vehicles in the garage yet.</p>
+        ) : (
+          <div className="space-y-3">
+            {vehicles.map((vehicle) => (
+              <Link
+                key={vehicle.id}
+                href={`/vehicle/${vehicle.id}`}
+                className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 p-5 transition hover:border-slate-700 hover:bg-slate-800"
+              >
+                <div>
+                  <p className="font-semibold text-white">
+                    {vehicle.year} {vehicle.make} {vehicle.model}
+                    {vehicle.trim ? ` ${vehicle.trim}` : ""}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-400">
+                    {vehicle.color ? `${vehicle.color} · ` : ""}
+                    {vehicle.mileage.toLocaleString()} mi
+                  </p>
+                </div>
+                <div className="text-right text-sm text-slate-400">
+                  <p>
+                    {vehicle.modificationCount} mod
+                    {vehicle.modificationCount !== 1 ? "s" : ""}
+                  </p>
+                  <p>
+                    {vehicle.maintenanceRecordCount} service
+                    {vehicle.maintenanceRecordCount !== 1 ? "s" : ""}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );

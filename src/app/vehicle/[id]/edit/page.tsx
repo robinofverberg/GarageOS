@@ -1,10 +1,6 @@
 import { notFound } from "next/navigation";
-import { getVehicleById, vehicles } from "@/lib/mock-data";
 import { EditVehicleForm } from "@/components/edit-vehicle-form";
-
-export function generateStaticParams() {
-  return vehicles.map((v) => ({ id: v.id }));
-}
+import { getVehicleById } from "@/lib/garage-data";
 
 export default async function EditVehiclePage({
   params,
@@ -12,7 +8,7 @@ export default async function EditVehiclePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const vehicle = getVehicleById(id);
+  const vehicle = await getVehicleById(id);
 
   if (!vehicle) {
     notFound();

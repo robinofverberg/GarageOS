@@ -1,10 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getVehicleById, vehicles } from "@/lib/mock-data";
-
-export function generateStaticParams() {
-  return vehicles.map((v) => ({ id: v.id }));
-}
+import { getVehicleById } from "@/lib/garage-data";
 
 export default async function VehicleDetailPage({
   params,
@@ -12,7 +8,7 @@ export default async function VehicleDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const vehicle = getVehicleById(id);
+  const vehicle = await getVehicleById(id);
 
   if (!vehicle) {
     notFound();
@@ -30,12 +26,20 @@ export default async function VehicleDetailPage({
             {vehicle.trim ? ` ${vehicle.trim}` : ""}
           </h1>
           <p className="mt-1 text-slate-400">
-            {vehicle.color} &middot; {vehicle.mileage.toLocaleString()} mi &middot; Purchased{" "}
-            {new Date(vehicle.purchasedAt).toLocaleDateString("en-US", {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
+            {vehicle.color ? `${vehicle.color} · ` : ""}
+            {vehicle.mileage.toLocaleString()} mi
+            {vehicle.purchasedAt ? (
+              <>
+                {" "}
+                &middot; Purchased{" "}
+                {new Date(vehicle.purchasedAt).toLocaleDateString("en-US", {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                  timeZone: "UTC",
+                })}
+              </>
+            ) : null}
           </p>
         </div>
         <Link
@@ -76,6 +80,7 @@ export default async function VehicleDetailPage({
                     {new Date(mod.installedAt).toLocaleDateString("en-US", {
                       year: "numeric",
                       month: "short",
+                      timeZone: "UTC",
                     })}
                   </p>
                 </div>
@@ -98,37 +103,35 @@ export default async function VehicleDetailPage({
           <p className="text-sm text-slate-500">No maintenance records yet.</p>
         ) : (
           <div className="space-y-3">
-            {vehicle.maintenanceHistory
-              .slice()
-              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-              .map((record) => (
-                <div
-                  key={record.id}
-                  className="rounded-xl border border-slate-800 bg-slate-900 p-5"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <p className="font-medium text-white">{record.title}</p>
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        {record.mileage.toLocaleString()} mi
-                      </p>
-                    </div>
-                    <p className="text-sm text-slate-400">
-                      {new Date(record.date).toLocaleDateString("en-US", {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </p>
-                  </div>
-                  {record.notes && (
-                    <p className="mt-3 text-sm text-slate-400">{record.notes}</p>
-                  )}
-                </div>
-              ))}
-          </div>
-        )}
-      </section>
-    </div>
-  );
+            {vehicle.maintenanceHistory.map((record) => (
+             <div
+               key={record.id}
+               className="rounded-xl border border-slate-800 bg-slate-900 p-5"
+             >
+               <div className="flex flex-wrap items-start justify-between gap-2">
+                 <div>
+                   <p className="font-medium text-white">{record.title}</p>
+                   <p className="mt-0.5 text-xs text-slate-500">
+                     {record.mileage.toLocaleString()} mi
+                   </p>
+                 </div>
+                 <p className="text-sm text-slate-400">
+                   {new Date(record.date).toLocaleDateString("en-US", {
+                     year: "numeric",
+                     month: "short",
+                     day: "numeric",
+                     timeZone: "UTC",
+                   })}
+                 </p>
+               </div>
+               {record.notes && (
+                 <p className="mt-3 text-sm text-slate-400">{record.notes}</p>
+               )}
+             </div>
+           ))}
+         </div>
+       )}
+     </section>
+   </div>
+ );
 }
