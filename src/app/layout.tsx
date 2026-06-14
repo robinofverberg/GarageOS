@@ -1,17 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 const navigation = [
   { href: "/", label: "Home" },
@@ -31,10 +20,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
+    <html lang="en" className="h-full antialiased">
       <body className="min-h-full bg-slate-950 text-slate-100">
         <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-6">
           <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 py-6">
