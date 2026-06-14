@@ -1,35 +1,9 @@
-"use client";
-
 import Link from "next/link";
-import { useState } from "react";
+import { createVehicle } from "@/app/garage/actions";
 
 const currentYear = new Date().getFullYear();
 
 export default function NewVehiclePage() {
-  const [submitted, setSubmitted] = useState(false);
-
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setSubmitted(true);
-  }
-
-  if (submitted) {
-    return (
-      <div className="space-y-6 text-center">
-        <h1 className="text-3xl font-semibold tracking-tight text-white">Vehicle Added</h1>
-        <p className="text-slate-300">
-          Your vehicle has been added to the garage (mock data — no database yet).
-        </p>
-        <Link
-          href="/garage"
-          className="inline-block rounded-lg bg-slate-700 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-slate-600"
-        >
-          Back to Garage
-        </Link>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-4">
@@ -39,7 +13,7 @@ export default function NewVehiclePage() {
         <h1 className="text-3xl font-semibold tracking-tight text-white">Add Vehicle</h1>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6 max-w-xl">
+      <form action={createVehicle} className="max-w-xl space-y-6">
         <div className="grid gap-6 sm:grid-cols-2">
           <Field label="Year" htmlFor="year">
             <input

@@ -42,7 +42,7 @@ export default function RootLayout({
           <main className="flex-1 py-10">{children}</main>
 
           <footer className="border-t border-slate-800 py-6 text-sm text-slate-400">
-            GarageOS v0.2 &mdash; Static Prototype
+            GarageOS v0.3 &mdash; Database Foundation
           </footer>
         </div>
       </body>

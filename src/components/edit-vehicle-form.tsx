@@ -1,36 +1,10 @@
-"use client";
-
 import Link from "next/link";
-import { useState } from "react";
-import type { Vehicle } from "@/lib/mock-data";
+import { updateVehicle } from "@/app/garage/actions";
+import type { VehicleDetail } from "@/lib/garage-data";
 
 const currentYear = new Date().getFullYear();
 
-export function EditVehicleForm({ vehicle }: { vehicle: Vehicle }) {
-  const [submitted, setSubmitted] = useState(false);
-
-  if (submitted) {
-    return (
-      <div className="space-y-6 text-center">
-        <h1 className="text-3xl font-semibold tracking-tight text-white">Changes Saved</h1>
-        <p className="text-slate-300">
-          Your vehicle details have been updated (mock data — no database yet).
-        </p>
-        <Link
-          href={`/vehicle/${vehicle.id}`}
-          className="inline-block rounded-lg bg-slate-700 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-slate-600"
-        >
-          Back to Vehicle
-        </Link>
-      </div>
-    );
-  }
-
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setSubmitted(true);
-  }
-
+export function EditVehicleForm({ vehicle }: { vehicle: VehicleDetail }) {
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-4">
@@ -43,7 +17,7 @@ export function EditVehicleForm({ vehicle }: { vehicle: Vehicle }) {
         <h1 className="text-3xl font-semibold tracking-tight text-white">Edit Vehicle</h1>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6 max-w-xl">
+      <form action={updateVehicle.bind(null, vehicle.id)} className="max-w-xl space-y-6">
         <div className="grid gap-6 sm:grid-cols-2">
           <Field label="Year" htmlFor="year">
             <input
@@ -85,7 +59,7 @@ export function EditVehicleForm({ vehicle }: { vehicle: Vehicle }) {
               id="trim"
               name="trim"
               type="text"
-              defaultValue={vehicle.trim}
+              defaultValue={vehicle.trim ?? ""}
               className={inputClass}
             />
           </Field>
@@ -95,7 +69,7 @@ export function EditVehicleForm({ vehicle }: { vehicle: Vehicle }) {
               id="color"
               name="color"
               type="text"
-              defaultValue={vehicle.color}
+              defaultValue={vehicle.color ?? ""}
               className={inputClass}
             />
           </Field>
@@ -116,7 +90,7 @@ export function EditVehicleForm({ vehicle }: { vehicle: Vehicle }) {
               id="purchasedAt"
               name="purchasedAt"
               type="date"
-              defaultValue={vehicle.purchasedAt}
+              defaultValue={vehicle.purchasedAt ?? ""}
               className={inputClass}
             />
           </Field>
@@ -127,7 +101,7 @@ export function EditVehicleForm({ vehicle }: { vehicle: Vehicle }) {
             id="notes"
             name="notes"
             rows={4}
-            defaultValue={vehicle.notes}
+            defaultValue={vehicle.notes ?? ""}
             className={`${inputClass} resize-none`}
           />
         </Field>

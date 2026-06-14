@@ -6,6 +6,104 @@ GarageOS is a platform for automotive enthusiasts to manage, document, showcase,
 
 Whether you own a completely stock daily driver, a weekend track car, a drift build, a restoration project, or an entire collection, GarageOS provides a single place to manage it all.
 
+## Local Setup (Step-by-Step)
+
+These steps get GarageOS running locally with all required dependencies.
+
+### 1. Install dependencies on your machine
+
+Required:
+
+* Node.js (LTS recommended, includes npm)
+* PostgreSQL (17+ recommended)
+* Git
+
+Windows install examples:
+
+```powershell
+winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements
+winget install PostgreSQL.PostgreSQL.17 --accept-source-agreements --accept-package-agreements
+```
+
+Verify installs:
+
+```powershell
+node --version
+npm --version
+```
+
+Note for PowerShell on some Windows machines:
+
+* If script execution blocks `npm`, use `npm.cmd` instead.
+
+### 2. Clone and enter the project
+
+```powershell
+git clone https://github.com/robinofverberg/GarageOS.git
+cd GarageOS
+```
+
+### 3. Install project packages
+
+```powershell
+npm.cmd install
+```
+
+### 4. Create the local database
+
+Create a database named `garageos`:
+
+```powershell
+& "C:\Program Files\PostgreSQL\17\bin\createdb.exe" -U postgres -h localhost garageos
+```
+
+If prompted, enter your PostgreSQL password.
+
+### 5. Configure environment variables
+
+Create a `.env` file in the project root with:
+
+```env
+DATABASE_URL="postgresql://postgres:YOUR_POSTGRES_PASSWORD@localhost:5432/garageos?schema=public"
+```
+
+Replace `YOUR_POSTGRES_PASSWORD` with your real PostgreSQL password.
+
+### 6. Apply database migrations
+
+```powershell
+npm.cmd run db:migrate
+```
+
+### 7. Seed demo data
+
+```powershell
+npm.cmd run db:seed
+```
+
+### 8. Start the development server
+
+```powershell
+npm.cmd run dev
+```
+
+Open the app at:
+
+* http://localhost:3000
+
+### 9. Manual test routes
+
+* /
+* /garage
+* /garage/new
+* /vehicle/[id]
+
+### Troubleshooting
+
+* `prisma is not recognized`: run `npm.cmd install` again.
+* Port 3000 already in use: stop the other Next.js process or use the alternate port shown in terminal.
+* Database auth errors: verify your `DATABASE_URL` password and PostgreSQL service status.
+
 ---
 
 ## Why GarageOS?
