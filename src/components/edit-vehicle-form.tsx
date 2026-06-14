@@ -90,7 +90,7 @@ export function EditVehicleForm({ vehicle }: { vehicle: VehicleDetail }) {
               id="purchasedAt"
               name="purchasedAt"
               type="date"
-              defaultValue={vehicle.purchasedAt}
+              defaultValue={vehicle.purchasedAt ?? ""}
               className={inputClass}
             />
           </Field>
