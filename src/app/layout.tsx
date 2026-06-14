@@ -6,7 +6,6 @@ const navigation = [
   { href: "/", label: "Home" },
   { href: "/dashboard", label: "Dashboard" },
   { href: "/garage", label: "Garage" },
-  { href: "/vehicle", label: "Vehicle" },
 ];
 
 export const metadata: Metadata = {
@@ -43,7 +42,7 @@ export default function RootLayout({
           <main className="flex-1 py-10">{children}</main>
 
           <footer className="border-t border-slate-800 py-6 text-sm text-slate-400">
-            Version 0.1 bootstrap
+            GarageOS v0.2 &mdash; Static Prototype
           </footer>
         </div>
       </body>

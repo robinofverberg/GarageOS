@@ -1,8 +1,71 @@
+import Link from "next/link";
+import { vehicles, getGarageStats } from "@/lib/mock-data";
+
 export default function GaragePage() {
+  const stats = getGarageStats();
+
   return (
-    <section className="space-y-4">
-      <h1 className="text-3xl font-semibold tracking-tight text-white">Garage</h1>
-      <p className="text-slate-300">Placeholder garage page for GarageOS v0.1.</p>
-    </section>
+    <div className="space-y-10">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-semibold tracking-tight text-white">Garage</h1>
+        <Link
+          href="/garage/new"
+          className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-600"
+        >
+          + Add Vehicle
+        </Link>
+      </div>
+
+      <section>
+        <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-slate-400">
+          Statistics
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            { label: "Vehicles", value: stats.totalVehicles },
+            { label: "Modifications", value: stats.totalModifications },
+            { label: "Maintenance Records", value: stats.totalMaintenanceRecords },
+            { label: "Oldest Vehicle", value: stats.oldestVehicleYear },
+          ].map(({ label, value }) => (
+            <div
+              key={label}
+              className="rounded-xl border border-slate-800 bg-slate-900 p-5"
+            >
+              <p className="text-3xl font-bold text-white">{value}</p>
+              <p className="mt-1 text-sm text-slate-400">{label}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-slate-400">
+          Vehicles
+        </h2>
+        <div className="space-y-3">
+          {vehicles.map((vehicle) => (
+            <Link
+              key={vehicle.id}
+              href={`/vehicle/${vehicle.id}`}
+              className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 p-5 transition hover:border-slate-700 hover:bg-slate-800"
+            >
+              <div>
+                <p className="font-semibold text-white">
+                  {vehicle.year} {vehicle.make} {vehicle.model}
+                  {vehicle.trim ? ` ${vehicle.trim}` : ""}
+                </p>
+                <p className="mt-1 text-sm text-slate-400">
+                  {vehicle.color} &middot; {vehicle.mileage.toLocaleString()} mi
+                </p>
+              </div>
+              <div className="text-right text-sm text-slate-400">
+                <p>{vehicle.modifications.length} mod{vehicle.modifications.length !== 1 ? "s" : ""}</p>
+                <p>{vehicle.maintenanceHistory.length} service{vehicle.maintenanceHistory.length !== 1 ? "s" : ""}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
+    </div>
   );
 }
