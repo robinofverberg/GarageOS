@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getGarageOverview } from "@/lib/garage-data";
 import { updateGarageUnitSystem } from "@/app/garage/actions";
+import { displayMileage } from "@/lib/units";
 
 export default async function GaragePage() {
   const { stats, vehicles, unitSystem } = await getGarageOverview();
@@ -90,7 +91,7 @@ export default async function GaragePage() {
                   </p>
                   <p className="mt-1 text-sm text-slate-400">
                     {vehicle.color ? `${vehicle.color} · ` : ""}
-                    {vehicle.mileage.toLocaleString()} {mileageLabel}
+                    {displayMileage(vehicle.mileage, isMetric).toLocaleString()} {mileageLabel}
                   </p>
                 </div>
                 <div className="text-right text-sm text-slate-400">

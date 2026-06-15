@@ -71,6 +71,17 @@ export type GarageOverview = {
   unitSystem: UnitSystem;
 };
 
+export async function getGarageUnitSystem(): Promise<UnitSystem> {
+  await connection();
+
+  const garage = await prisma.garage.findFirst({
+    select: { unitSystem: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return garage?.unitSystem ?? UnitSystem.Imperial;
+}
+
 export async function getGarageOverview(): Promise<GarageOverview> {
   await connection();
 

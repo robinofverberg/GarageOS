@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getVehicleById } from "@/lib/garage-data";
 import { DeleteVehicleButton } from "@/components/delete-vehicle-button";
+import { displayMileage } from "@/lib/units";
 
 const bodyTypeLabels: Record<string, string> = {
  Sedan: "Sedan",
@@ -55,7 +56,7 @@ export default async function VehicleDetailPage({
          </h1>
          <p className="mt-1 text-slate-400">
            {vehicle.color ? `${vehicle.color} · ` : ""}
-           {vehicle.mileage.toLocaleString()} {mileageLabel}
+           {displayMileage(vehicle.mileage, isMetric).toLocaleString()} {mileageLabel}
            {vehicle.registrationNumber ? ` · ${vehicle.registrationNumber}` : ""}
            {vehicle.purchasedAt ? (
              <>
@@ -105,7 +106,7 @@ export default async function VehicleDetailPage({
            vehicle.fuelType ? { label: "Fuel Type", value: vehicle.fuelType } : null,
            vehicle.horsepower ? { label: "Horsepower", value: `${vehicle.horsepower} hp` } : null,
            vehicle.torque ? { label: "Torque", value: `${vehicle.torque} Nm` } : null,
-           { label: "Mileage", value: `${vehicle.mileage.toLocaleString()} ${mileageLabel}` },
+           { label: "Mileage", value: `${displayMileage(vehicle.mileage, isMetric).toLocaleString()} ${mileageLabel}` },
          ]
            .filter(Boolean)
            .map((item) => (
@@ -207,7 +208,7 @@ export default async function VehicleDetailPage({
                 <div>
                   <p className="font-medium text-white">{record.title}</p>
                   <p className="mt-0.5 text-xs text-slate-500">
-                    {record.mileage.toLocaleString()} {mileageLabel}
+                    {displayMileage(record.mileage, isMetric).toLocaleString()} {mileageLabel}
                   </p>
                 </div>
                 <p className="text-sm text-slate-400">

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { BodyType, UnitSystem } from "@prisma/client";
+import { inputMileageToKm } from "@/lib/units";
 
 type VehicleInput = {
   nickname: string | null;
@@ -26,12 +27,18 @@ type VehicleInput = {
 };
 
 export async function createVehicle(formData: FormData) {
-  const input = parseVehicleInput(formData);
   const garageId = await getPrimaryGarageId();
+  const garage = await prisma.garage.findUnique({
+    where: { id: garageId },
+    select: { unitSystem: true },
+  });
+  const isMetric = garage?.unitSystem === UnitSystem.Metric;
+  const input = parseVehicleInput(formData);
   const vehicle = await prisma.vehicle.create({
     data: {
       garageId,
       ...input,
+      mileage: inputMileageToKm(input.mileage, isMetric),
     },
   });
 
@@ -42,11 +49,16 @@ export async function createVehicle(formData: FormData) {
 }
 
 export async function updateVehicle(vehicleId: string, formData: FormData) {
+  const existing = await prisma.vehicle.findUnique({
+    where: { id: vehicleId },
+    select: { garage: { select: { unitSystem: true } } },
+  });
+  const isMetric = existing?.garage.unitSystem === UnitSystem.Metric;
   const input = parseVehicleInput(formData);
 
   await prisma.vehicle.update({
     where: { id: vehicleId },
-    data: input,
+    data: { ...input, mileage: inputMileageToKm(input.mileage, isMetric) },
   });
 
   revalidatePath("/garage");

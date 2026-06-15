@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createVehicle } from "@/app/garage/actions";
 import { SubmitButton } from "@/components/submit-button";
+import { getGarageUnitSystem } from "@/lib/garage-data";
 
 const currentYear = new Date().getFullYear();
 
@@ -17,7 +18,10 @@ const bodyTypeOptions = [
   { value: "Other", label: "Other" },
 ];
 
-export default function NewVehiclePage() {
+export default async function NewVehiclePage() {
+  const unitSystem = await getGarageUnitSystem();
+  const isMetric = unitSystem === "Metric";
+  const mileageLabel = isMetric ? "km" : "mi";
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-4">
@@ -180,7 +184,7 @@ export default function NewVehiclePage() {
         <section className="space-y-4">
           <SectionHeading>Ownership</SectionHeading>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Mileage" htmlFor="mileage">
+            <Field label={`Mileage (${mileageLabel})`} htmlFor="mileage">
               <input
                 id="mileage"
                 name="mileage"

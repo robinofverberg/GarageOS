@@ -2,6 +2,8 @@ import Link from "next/link";
 import { updateVehicle } from "@/app/garage/actions";
 import { SubmitButton } from "@/components/submit-button";
 import type { VehicleDetail } from "@/lib/garage-data";
+import type { UnitSystem } from "@prisma/client";
+import { displayMileage } from "@/lib/units";
 
 const currentYear = new Date().getFullYear();
 
@@ -18,7 +20,15 @@ const bodyTypeOptions = [
   { value: "Other", label: "Other" },
 ];
 
-export function EditVehicleForm({ vehicle }: { vehicle: VehicleDetail }) {
+export function EditVehicleForm({
+  vehicle,
+  unitSystem,
+}: {
+  vehicle: VehicleDetail;
+  unitSystem: UnitSystem;
+}) {
+  const isMetric = unitSystem === "Metric";
+  const mileageLabel = isMetric ? "km" : "mi";
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-4">
@@ -196,13 +206,13 @@ export function EditVehicleForm({ vehicle }: { vehicle: VehicleDetail }) {
         <section className="space-y-4">
           <SectionHeading>Ownership</SectionHeading>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Mileage" htmlFor="mileage">
+            <Field label={`Mileage (${mileageLabel})`} htmlFor="mileage">
               <input
                 id="mileage"
                 name="mileage"
                 type="number"
                 min="0"
-                defaultValue={vehicle.mileage}
+                defaultValue={displayMileage(vehicle.mileage, isMetric)}
                 className={inputClass}
               />
             </Field>

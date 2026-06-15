@@ -14,5 +14,5 @@ export default async function EditVehiclePage({
     notFound();
   }
 
-  return <EditVehicleForm vehicle={result.vehicle} />;
+  return <EditVehicleForm vehicle={result.vehicle} unitSystem={result.unitSystem} />;
 }
