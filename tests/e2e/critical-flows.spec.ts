@@ -32,7 +32,13 @@ test("registers, creates a first vehicle, and sees it in the garage", async ({ p
 
   await expect(page).toHaveURL(/\/vehicle\/[^/]+$/);
   await expect(page.getByRole("heading", { name: /Test Runner/ })).toBeVisible();
-  await expect(page.getByText("100,000 mi")).toBeVisible();
+  await expect(
+    page
+      .locator("div")
+      .filter({ has: page.getByText("Mileage", { exact: true }) })
+      .filter({ has: page.getByText("100,000 mi", { exact: true }) })
+      .first()
+  ).toBeVisible();
 
   await page.getByRole("link", { name: /Garage/ }).click();
   await expect(page).toHaveURL(/\/garage$/);
