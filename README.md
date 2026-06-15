@@ -121,6 +121,49 @@ Open: http://localhost:3000
 * Port 3000 in use: stop the old Next.js process or use the port printed by Next.js.
 * DB auth errors: verify `DATABASE_URL` password and PostgreSQL service status.
 
+## Testing
+
+GarageOS uses Vitest for unit, component, server action, and database integration tests. Playwright covers critical end-to-end flows against the built Next app.
+
+Install dependencies:
+
+```powershell
+npm.cmd install
+```
+
+Run fast tests:
+
+```powershell
+npm.cmd run test:unit
+```
+
+Run database integration tests against a dedicated test database:
+
+```powershell
+createdb -U garageos -h localhost garageos_test
+$env:DATABASE_URL="postgresql://garageos:garageos@localhost:5432/garageos_test?schema=public"
+$env:AUTH_SECRET="test-secret-for-local-test-runs"
+npm.cmd run test:db
+```
+
+The database reset script refuses to run unless the database name includes `test`.
+
+Run end-to-end tests:
+
+```powershell
+$env:DATABASE_URL="postgresql://garageos:garageos@localhost:5432/garageos_test?schema=public"
+$env:AUTH_SECRET="test-secret-for-local-test-runs"
+npm.cmd run test:db
+npm.cmd run build
+npm.cmd run test:e2e
+```
+
+Run the CI-equivalent pipeline:
+
+```powershell
+npm.cmd run test:ci
+```
+
 ---
 
 ## Why GarageOS?

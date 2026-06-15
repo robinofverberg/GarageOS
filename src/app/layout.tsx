@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
 import { getCurrentUser } from "@/lib/session";
-import { logoutUser } from "@/app/auth/actions";
-import { SubmitButton } from "@/components/submit-button";
 
 export const metadata: Metadata = {
   title: "GarageOS",
@@ -41,13 +39,6 @@ export default async function RootLayout({
                       {item.label}
                     </Link>
                   ))}
-                  <form action={logoutUser}>
-                    <SubmitButton
-                      label="Sign out"
-                      pendingLabel="Signing out…"
-                      className="rounded-md px-3 py-2 text-slate-300 transition hover:bg-slate-800 hover:text-white disabled:opacity-50"
-                    />
-                  </form>
                 </>
               ) : (
                 <>

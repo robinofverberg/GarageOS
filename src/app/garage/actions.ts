@@ -100,16 +100,25 @@ export async function updateGarageUnitSystem(formData: FormData) {
   });
 
   if (!garage) {
-    return;
+    await prisma.garage.create({
+      data: {
+        userId: user.sub,
+        slug: user.sub,
+        name: "My Garage",
+        description: "My GarageOS garage.",
+        unitSystem: value as UnitSystem,
+      },
+    });
+  } else {
+    await prisma.garage.update({
+      where: { id: garage.id },
+      data: { unitSystem: value as UnitSystem },
+    });
   }
-
-  await prisma.garage.update({
-    where: { id: garage.id },
-    data: { unitSystem: value as UnitSystem },
-  });
 
   revalidatePath("/garage");
   revalidatePath("/vehicle");
+  revalidatePath("/profile");
 }
 
 async function getPrimaryGarageId(userId: string): Promise<string> {

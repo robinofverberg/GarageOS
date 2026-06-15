@@ -1,0 +1,47 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: garageos_test
+          POSTGRES_USER: garageos
+          POSTGRES_PASSWORD: garageos
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U garageos -d garageos_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://garageos:garageos@localhost:5432/garageos_test?schema=public
+      AUTH_SECRET: ci-test-secret-for-garageos-auth-sessions
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run test pipeline
+        run: npm run test:ci
