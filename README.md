@@ -8,48 +8,46 @@ Whether you own a completely stock daily driver, a weekend track car, a drift bu
 
 ## Local Setup (Step-by-Step)
 
-These steps get GarageOS running locally with all required dependencies.
+These steps are for v0.5 (authentication) and are tested for Windows + PowerShell.
 
-### 1. Install dependencies on your machine
+### 1. Install required software
 
 Required:
 
-* Node.js (LTS recommended, includes npm)
-* PostgreSQL (17+ recommended)
+* Node.js (LTS, includes npm)
+* PostgreSQL (17+)
 * Git
 
-Windows install examples:
+Install with Winget:
 
 ```powershell
 winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements
 winget install PostgreSQL.PostgreSQL.17 --accept-source-agreements --accept-package-agreements
 ```
 
-Verify installs:
+Verify:
 
 ```powershell
 node --version
 npm --version
 ```
 
-Note for PowerShell on some Windows machines:
+If PowerShell blocks `npm` scripts on your machine, use `npm.cmd` in all commands below.
 
-* If script execution blocks `npm`, use `npm.cmd` instead.
-
-### 2. Clone and enter the project
+### 2. Clone repository
 
 ```powershell
 git clone https://github.com/robinofverberg/GarageOS.git
 cd GarageOS
 ```
 
-### 3. Install project packages
+### 3. Install project dependencies
 
 ```powershell
 npm.cmd install
 ```
 
-### 4. Create the local database
+### 4. Create local PostgreSQL database
 
 Create a database named `garageos`:
 
@@ -59,58 +57,69 @@ Create a database named `garageos`:
 
 If prompted, enter your PostgreSQL password.
 
-### 5. Configure environment variables
+### 5. Configure environment file
 
-Create a `.env` file in the project root with:
+Create `.env` in the project root:
 
 ```env
 DATABASE_URL="postgresql://postgres:YOUR_POSTGRES_PASSWORD@localhost:5432/garageos?schema=public"
-AUTH_SECRET="your-random-secret-at-least-32-chars"
+AUTH_SECRET="YOUR_RANDOM_64_CHAR_SECRET"
 ```
 
-Replace `YOUR_POSTGRES_PASSWORD` with your real PostgreSQL password.
+Replace:
 
+* `YOUR_POSTGRES_PASSWORD` with your PostgreSQL password
+* `YOUR_RANDOM_64_CHAR_SECRET` with a random secret used for auth session signing
 
-`AUTH_SECRET` is used to sign session cookies. Generate a strong random value:
+Generate a secret quickly:
 
 ```powershell
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-### 6. Apply database migrations
+### 6. Generate Prisma client and apply migrations
 
 ```powershell
-npm.cmd run db:migrate
+npm.cmd run db:generate
+npm.cmd run db:deploy
 ```
 
-### 7. Seed demo data
+### 7. Seed demo data (includes demo auth user)
 
 ```powershell
 npm.cmd run db:seed
 ```
 
-### 8. Start the development server
+### 8. Start development server
 
 ```powershell
 npm.cmd run dev
 ```
 
-Open the app at:
+Open: http://localhost:3000
 
-* http://localhost:3000
+## First Login (v0.5)
 
-### 9. Manual test routes
-
-* /
-* /garage
-* /garage/new
-* /vehicle/[id]
+1. Open `http://localhost:3000/auth/login`
+2. Sign in with demo account:
+	* Email: `demo@example.com`
+	* Password: `demo1234`
+3. After login you should be redirected to `/garage`
+4. Confirm protected pages work:
+	* `/garage`
+	* `/dashboard`
+	* `/profile`
+5. Confirm auth guard works:
+	* Sign out
+	* Try opening `/garage` again (you should be redirected to `/auth/login`)
 
 ### Troubleshooting
 
-* `prisma is not recognized`: run `npm.cmd install` again.
-* Port 3000 already in use: stop the other Next.js process or use the alternate port shown in terminal.
-* Database auth errors: verify your `DATABASE_URL` password and PostgreSQL service status.
+* `prisma` not recognized: run `npm.cmd install` again.
+* `Cannot read properties of undefined (reading 'findUnique')` on login: run `npm.cmd run db:generate` and restart `npm.cmd run dev`.
+* `AUTH_SECRET is not configured`: add `AUTH_SECRET` in `.env`, then restart dev server.
+* Port 3000 in use: stop the old Next.js process or use the port printed by Next.js.
+* DB auth errors: verify `DATABASE_URL` password and PostgreSQL service status.
 
 ---
 
