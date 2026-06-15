@@ -2,9 +2,13 @@ import Link from "next/link";
 import { getGarageOverview } from "@/lib/garage-data";
 import { updateGarageUnitSystem } from "@/app/garage/actions";
 import { displayMileage } from "@/lib/units";
+import { requireUser } from "@/lib/session";
+
+export const dynamic = "force-dynamic";
 
 export default async function GaragePage() {
-  const { stats, vehicles, unitSystem } = await getGarageOverview();
+  const user = await requireUser();
+  const { stats, vehicles, unitSystem } = await getGarageOverview(user.sub);
   const isMetric = unitSystem === "Metric";
   const mileageLabel = isMetric ? "km" : "mi";
 

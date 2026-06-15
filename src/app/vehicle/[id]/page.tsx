@@ -3,6 +3,9 @@ import { notFound } from "next/navigation";
 import { getVehicleById } from "@/lib/garage-data";
 import { DeleteVehicleButton } from "@/components/delete-vehicle-button";
 import { displayMileage } from "@/lib/units";
+import { requireUser } from "@/lib/session";
+
+export const dynamic = "force-dynamic";
 
 const bodyTypeLabels: Record<string, string> = {
  Sedan: "Sedan",
@@ -23,7 +26,8 @@ export default async function VehicleDetailPage({
  params: Promise<{ id: string }>;
 }) {
  const { id } = await params;
- const result = await getVehicleById(id);
+ const user = await requireUser();
+ const result = await getVehicleById(id, user.sub);
 
  if (!result) {
    notFound();

@@ -71,10 +71,11 @@ export type GarageOverview = {
   unitSystem: UnitSystem;
 };
 
-export async function getGarageUnitSystem(): Promise<UnitSystem> {
+export async function getGarageUnitSystem(userId: string): Promise<UnitSystem> {
   await connection();
 
   const garage = await prisma.garage.findFirst({
+    where: { userId },
     select: { unitSystem: true },
     orderBy: { createdAt: "asc" },
   });
@@ -82,16 +83,34 @@ export async function getGarageUnitSystem(): Promise<UnitSystem> {
   return garage?.unitSystem ?? UnitSystem.Imperial;
 }
 
-export async function getGarageOverview(): Promise<GarageOverview> {
+export async function getGarageOverview(userId: string): Promise<GarageOverview> {
   await connection();
 
-  const [garage, vehicles, vehicleAggregate, totalModifications, totalMaintenanceRecords] =
+  const garage = await prisma.garage.findFirst({
+    where: { userId },
+    select: { id: true, unitSystem: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (!garage) {
+    return {
+      stats: {
+        totalVehicles: 0,
+        totalModifications: 0,
+        totalMaintenanceRecords: 0,
+        oldestVehicleYear: null,
+      } satisfies GarageStats,
+      vehicles: [],
+      unitSystem: UnitSystem.Imperial,
+    };
+  }
+
+  const garageId = garage.id;
+
+  const [vehicles, vehicleAggregate, totalModifications, totalMaintenanceRecords] =
     await prisma.$transaction([
-      prisma.garage.findFirst({
-        select: { unitSystem: true },
-        orderBy: { createdAt: "asc" },
-      }),
       prisma.vehicle.findMany({
+        where: { garageId },
         orderBy: [{ year: "asc" }, { make: "asc" }, { model: "asc" }],
         include: {
           _count: {
@@ -103,6 +122,7 @@ export async function getGarageOverview(): Promise<GarageOverview> {
         },
       }),
       prisma.vehicle.aggregate({
+        where: { garageId },
         _count: {
           _all: true,
         },
@@ -110,8 +130,12 @@ export async function getGarageOverview(): Promise<GarageOverview> {
           year: true,
         },
       }),
-      prisma.modification.count(),
-      prisma.maintenanceRecord.count(),
+      prisma.modification.count({
+        where: { vehicle: { garageId } },
+      }),
+      prisma.maintenanceRecord.count({
+        where: { vehicle: { garageId } },
+      }),
     ]);
 
   return {
@@ -133,15 +157,18 @@ export async function getGarageOverview(): Promise<GarageOverview> {
       modificationCount: vehicle._count.modifications,
       maintenanceRecordCount: vehicle._count.maintenanceRecords,
     })) satisfies VehicleListItem[],
-    unitSystem: garage?.unitSystem ?? UnitSystem.Imperial,
+    unitSystem: garage.unitSystem,
   };
 }
 
-export async function getVehicleById(id: string) {
+export async function getVehicleById(id: string, userId: string) {
   await connection();
 
-  const vehicle = await prisma.vehicle.findUnique({
-    where: { id },
+  const vehicle = await prisma.vehicle.findFirst({
+    where: {
+      id,
+      garage: { userId },
+    },
     include: {
       modifications: {
         orderBy: [{ installedAt: "desc" }, { createdAt: "desc" }],
