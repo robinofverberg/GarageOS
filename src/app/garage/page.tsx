@@ -1,19 +1,38 @@
 import Link from "next/link";
 import { getGarageOverview } from "@/lib/garage-data";
+import { updateGarageUnitSystem } from "@/app/garage/actions";
 
 export default async function GaragePage() {
-  const { stats, vehicles } = await getGarageOverview();
+  const { stats, vehicles, unitSystem } = await getGarageOverview();
+  const isMetric = unitSystem === "Metric";
+  const mileageLabel = isMetric ? "km" : "mi";
 
   return (
     <div className="space-y-10">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-semibold tracking-tight text-white">Garage</h1>
-        <Link
-          href="/garage/new"
-          className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-600"
-        >
-          + Add Vehicle
-        </Link>
+        <div className="flex items-center gap-3">
+          <form action={updateGarageUnitSystem}>
+            <input
+              type="hidden"
+              name="unitSystem"
+              value={isMetric ? "Imperial" : "Metric"}
+            />
+            <button
+              type="submit"
+              className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-400 transition hover:border-slate-600 hover:text-white"
+              title="Switch unit system"
+            >
+              {isMetric ? "km" : "mi"} ⇄ {isMetric ? "mi" : "km"}
+            </button>
+          </form>
+          <Link
+            href="/garage/new"
+            className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-600"
+          >
+            + Add Vehicle
+          </Link>
+        </div>
       </div>
 
       <section>
@@ -54,12 +73,24 @@ export default async function GaragePage() {
               >
                 <div>
                   <p className="font-semibold text-white">
-                    {vehicle.year} {vehicle.make} {vehicle.model}
-                    {vehicle.trim ? ` ${vehicle.trim}` : ""}
+                    {vehicle.nickname ? (
+                      <>
+                        {vehicle.nickname}
+                        <span className="ml-2 text-sm font-normal text-slate-400">
+                          {vehicle.year} {vehicle.make} {vehicle.model}
+                          {vehicle.trim ? ` ${vehicle.trim}` : ""}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        {vehicle.year} {vehicle.make} {vehicle.model}
+                        {vehicle.trim ? ` ${vehicle.trim}` : ""}
+                      </>
+                    )}
                   </p>
                   <p className="mt-1 text-sm text-slate-400">
                     {vehicle.color ? `${vehicle.color} · ` : ""}
-                    {vehicle.mileage.toLocaleString()} mi
+                    {vehicle.mileage.toLocaleString()} {mileageLabel}
                   </p>
                 </div>
                 <div className="text-right text-sm text-slate-400">

@@ -3,15 +3,25 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { BodyType, UnitSystem } from "@prisma/client";
 
 type VehicleInput = {
+  nickname: string | null;
   year: number;
   make: string;
   model: string;
   trim: string | null;
+  registrationNumber: string | null;
+  bodyType: BodyType | null;
+  engine: string | null;
+  transmission: string | null;
+  fuelType: string | null;
+  horsepower: number | null;
+  torque: number | null;
   color: string | null;
   mileage: number;
   purchasedAt: Date | null;
+  purchasePrice: number | null;
   notes: string | null;
 };
 
@@ -46,6 +56,41 @@ export async function updateVehicle(vehicleId: string, formData: FormData) {
   redirect(`/vehicle/${vehicleId}`);
 }
 
+export async function deleteVehicle(vehicleId: string) {
+  await prisma.vehicle.delete({
+    where: { id: vehicleId },
+  });
+
+  revalidatePath("/garage");
+
+  redirect("/garage");
+}
+
+export async function updateGarageUnitSystem(formData: FormData) {
+  const value = formData.get("unitSystem");
+
+  if (value !== "Metric" && value !== "Imperial") {
+    throw new Error("Invalid unit system.");
+  }
+
+  const garage = await prisma.garage.findFirst({
+    select: { id: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (!garage) {
+    return;
+  }
+
+  await prisma.garage.update({
+    where: { id: garage.id },
+    data: { unitSystem: value as UnitSystem },
+  });
+
+  revalidatePath("/garage");
+  revalidatePath("/vehicle");
+}
+
 async function getPrimaryGarageId() {
   const existingGarage = await prisma.garage.findFirst({
     select: { id: true },
@@ -70,13 +115,22 @@ async function getPrimaryGarageId() {
 
 function parseVehicleInput(formData: FormData): VehicleInput {
   return {
-    year: parseInteger(formData, "year", { min: 1886 }),
+    nickname: parseOptionalString(formData, "nickname"),
+    year: parseInteger(formData, "year", { min: 1886, max: new Date().getFullYear() + 1 }),
     make: parseString(formData, "make", { required: true }),
     model: parseString(formData, "model", { required: true }),
     trim: parseOptionalString(formData, "trim"),
+    registrationNumber: parseOptionalRegistrationNumber(formData),
+    bodyType: parseOptionalBodyType(formData),
+    engine: parseOptionalString(formData, "engine"),
+    transmission: parseOptionalString(formData, "transmission"),
+    fuelType: parseOptionalString(formData, "fuelType"),
+    horsepower: parseOptionalPositiveInteger(formData, "horsepower"),
+    torque: parseOptionalPositiveInteger(formData, "torque"),
     color: parseOptionalString(formData, "color"),
     mileage: parseInteger(formData, "mileage", { min: 0, fallback: 0 }),
     purchasedAt: parseOptionalDate(formData, "purchasedAt"),
+    purchasePrice: parseOptionalPositiveFloat(formData, "purchasePrice"),
     notes: parseOptionalString(formData, "notes"),
   };
 }
@@ -106,10 +160,36 @@ function parseOptionalString(formData: FormData, field: string) {
   return value ? value : null;
 }
 
+function parseOptionalRegistrationNumber(formData: FormData) {
+  const value = parseOptionalString(formData, "registrationNumber");
+
+  if (value && value.length > 20) {
+    throw new Error("Registration number must be 20 characters or fewer.");
+  }
+
+  return value;
+}
+
+function parseOptionalBodyType(formData: FormData): BodyType | null {
+  const value = parseOptionalString(formData, "bodyType");
+
+  if (!value) {
+    return null;
+  }
+
+  const validValues = Object.values(BodyType);
+
+  if (!validValues.includes(value as BodyType)) {
+    throw new Error(`Invalid body type: ${value}`);
+  }
+
+  return value as BodyType;
+}
+
 function parseInteger(
   formData: FormData,
   field: string,
-  options: { min?: number; fallback?: number } = {}
+  options: { min?: number; max?: number; fallback?: number } = {}
 ) {
   const value = parseOptionalString(formData, field);
 
@@ -129,6 +209,42 @@ function parseInteger(
 
   if (options.min !== undefined && parsedValue < options.min) {
     throw new Error(`${field} must be at least ${options.min}.`);
+  }
+
+  if (options.max !== undefined && parsedValue > options.max) {
+    throw new Error(`${field} must be at most ${options.max}.`);
+  }
+
+  return parsedValue;
+}
+
+function parseOptionalPositiveInteger(formData: FormData, field: string) {
+  const value = parseOptionalString(formData, field);
+
+  if (!value) {
+    return null;
+  }
+
+  const parsedValue = Number.parseInt(value, 10);
+
+  if (Number.isNaN(parsedValue) || parsedValue < 0) {
+    throw new Error(`Invalid ${field} value.`);
+  }
+
+  return parsedValue;
+}
+
+function parseOptionalPositiveFloat(formData: FormData, field: string) {
+  const value = parseOptionalString(formData, field);
+
+  if (!value) {
+    return null;
+  }
+
+  const parsedValue = Number.parseFloat(value);
+
+  if (Number.isNaN(parsedValue) || parsedValue < 0) {
+    throw new Error(`Invalid ${field} value.`);
   }
 
   return parsedValue;
