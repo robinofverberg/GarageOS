@@ -39,6 +39,16 @@ enum UnitSystem {
   Imperial
 }
 
+enum MaintenanceCategory {
+  Service
+  Inspection
+  Repair
+  Modification
+  Tires
+  Fluids
+  Other
+}
+
 model Garage {
   id          String     @id @default(cuid())
   userId      String
@@ -89,8 +99,10 @@ model MaintenanceRecord {
   vehicleId   String
   vehicle     Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   title       String
+  category    MaintenanceCategory @default(Service)
   performedAt DateTime
   mileage     Int
+  cost        Float?
   notes       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

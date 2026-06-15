@@ -40,7 +40,7 @@ test("registers, creates a first vehicle, and sees it in the garage", async ({ p
       .first()
   ).toBeVisible();
 
-  await page.getByRole("link", { name: /Garage/ }).click();
+  await page.getByRole("navigation").getByRole("link", { name: "Garage" }).click();
   await expect(page).toHaveURL(/\/garage$/);
   await expect(page.getByText("Test Runner")).toBeVisible();
   await expect(page.getByText(/1994 Toyota Supra Turbo/)).toBeVisible();

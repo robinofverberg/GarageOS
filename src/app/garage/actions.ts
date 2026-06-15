@@ -5,7 +5,18 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { BodyType, UnitSystem } from "@prisma/client";
+import type { MaintenanceCategory } from "@prisma/client";
 import { inputMileageToKm } from "@/lib/units";
+
+const maintenanceCategories = [
+  "Service",
+  "Inspection",
+  "Repair",
+  "Modification",
+  "Tires",
+  "Fluids",
+  "Other",
+] satisfies MaintenanceCategory[];
 
 type VehicleInput = {
   nickname: string | null;
@@ -24,6 +35,15 @@ type VehicleInput = {
   mileage: number;
   purchasedAt: Date | null;
   purchasePrice: number | null;
+  notes: string | null;
+};
+
+type MaintenanceRecordInput = {
+  title: string;
+  category: MaintenanceCategory;
+  performedAt: Date;
+  mileage: number;
+  cost: number | null;
   notes: string | null;
 };
 
@@ -83,6 +103,81 @@ export async function deleteVehicle(vehicleId: string) {
   revalidatePath("/garage");
 
   redirect("/garage");
+}
+
+export async function createMaintenanceRecord(vehicleId: string, formData: FormData) {
+  const user = await requireUser();
+  const vehicle = await prisma.vehicle.findFirst({
+    where: { id: vehicleId, garage: { userId: user.sub } },
+    select: { id: true, garage: { select: { unitSystem: true } } },
+  });
+
+  if (!vehicle) {
+    throw new Error("Vehicle not found.");
+  }
+
+  const isMetric = vehicle.garage.unitSystem === UnitSystem.Metric;
+  const input = parseMaintenanceRecordInput(formData);
+
+  await prisma.maintenanceRecord.create({
+    data: {
+      vehicleId,
+      ...input,
+      mileage: inputMileageToKm(input.mileage, isMetric),
+    },
+  });
+
+  revalidatePath("/garage");
+  revalidatePath(`/vehicle/${vehicleId}`);
+}
+
+export async function updateMaintenanceRecord(recordId: string, formData: FormData) {
+  const user = await requireUser();
+  const record = await prisma.maintenanceRecord.findFirst({
+    where: { id: recordId, vehicle: { garage: { userId: user.sub } } },
+    select: {
+      id: true,
+      vehicleId: true,
+      vehicle: { select: { garage: { select: { unitSystem: true } } } },
+    },
+  });
+
+  if (!record) {
+    throw new Error("Maintenance record not found.");
+  }
+
+  const isMetric = record.vehicle.garage.unitSystem === UnitSystem.Metric;
+  const input = parseMaintenanceRecordInput(formData);
+
+  await prisma.maintenanceRecord.update({
+    where: { id: recordId },
+    data: {
+      ...input,
+      mileage: inputMileageToKm(input.mileage, isMetric),
+    },
+  });
+
+  revalidatePath("/garage");
+  revalidatePath(`/vehicle/${record.vehicleId}`);
+}
+
+export async function deleteMaintenanceRecord(recordId: string) {
+  const user = await requireUser();
+  const record = await prisma.maintenanceRecord.findFirst({
+    where: { id: recordId, vehicle: { garage: { userId: user.sub } } },
+    select: { vehicleId: true },
+  });
+
+  if (!record) {
+    throw new Error("Maintenance record not found.");
+  }
+
+  await prisma.maintenanceRecord.delete({
+    where: { id: recordId },
+  });
+
+  revalidatePath("/garage");
+  revalidatePath(`/vehicle/${record.vehicleId}`);
 }
 
 export async function updateGarageUnitSystem(formData: FormData) {
@@ -167,6 +262,17 @@ function parseVehicleInput(formData: FormData): VehicleInput {
   };
 }
 
+function parseMaintenanceRecordInput(formData: FormData): MaintenanceRecordInput {
+  return {
+    title: parseString(formData, "title", { required: true }),
+    category: parseMaintenanceCategory(formData),
+    performedAt: parsePastOrTodayDate(formData, "performedAt"),
+    mileage: parseInteger(formData, "mileage", { min: 0 }),
+    cost: parseOptionalPositiveFloat(formData, "cost"),
+    notes: parseOptionalString(formData, "notes"),
+  };
+}
+
 function parseString(
   formData: FormData,
   field: string,
@@ -216,6 +322,16 @@ function parseOptionalBodyType(formData: FormData): BodyType | null {
   }
 
   return value as BodyType;
+}
+
+function parseMaintenanceCategory(formData: FormData): MaintenanceCategory {
+  const value = parseString(formData, "category", { required: true });
+
+  if (!maintenanceCategories.includes(value as MaintenanceCategory)) {
+    throw new Error(`Invalid maintenance category: ${value}`);
+  }
+
+  return value as MaintenanceCategory;
 }
 
 function parseInteger(
@@ -293,6 +409,28 @@ function parseOptionalDate(formData: FormData, field: string) {
 
   if (Number.isNaN(parsedValue.getTime())) {
     throw new Error(`Invalid ${field} value.`);
+  }
+
+  return parsedValue;
+}
+
+function parseDate(formData: FormData, field: string) {
+  const parsedValue = parseOptionalDate(formData, field);
+
+  if (!parsedValue) {
+    throw new Error(`${field} is required.`);
+  }
+
+  return parsedValue;
+}
+
+function parsePastOrTodayDate(formData: FormData, field: string) {
+  const parsedValue = parseDate(formData, field);
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+
+  if (parsedValue > today) {
+    throw new Error(`${field} cannot be in the future.`);
   }
 
   return parsedValue;
