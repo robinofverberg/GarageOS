@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { getGarageOverview } from "@/lib/garage-data";
-import { updateGarageUnitSystem } from "@/app/garage/actions";
 import { displayMileage } from "@/lib/units";
 import { requireUser } from "@/lib/session";
 
@@ -8,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export default async function GaragePage() {
   const user = await requireUser();
-  const { stats, vehicles, unitSystem } = await getGarageOverview(user.sub);
+  const { vehicles, unitSystem } = await getGarageOverview(user.sub);
   const isMetric = unitSystem === "Metric";
   const mileageLabel = isMetric ? "km" : "mi";
 
@@ -16,51 +15,13 @@ export default async function GaragePage() {
     <div className="space-y-10">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-semibold tracking-tight text-white">Garage</h1>
-        <div className="flex items-center gap-3">
-          <form action={updateGarageUnitSystem}>
-            <input
-              type="hidden"
-              name="unitSystem"
-              value={isMetric ? "Imperial" : "Metric"}
-            />
-            <button
-              type="submit"
-              className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-400 transition hover:border-slate-600 hover:text-white"
-              title="Switch unit system"
-            >
-              {isMetric ? "km" : "mi"} ⇄ {isMetric ? "mi" : "km"}
-            </button>
-          </form>
-          <Link
-            href="/garage/new"
-            className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-600"
-          >
-            + Add Vehicle
-          </Link>
-        </div>
+        <Link
+          href="/garage/new"
+          className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-600"
+        >
+          + Add Vehicle
+        </Link>
       </div>
-
-      <section>
-        <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-slate-400">
-          Statistics
-        </h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            { label: "Vehicles", value: stats.totalVehicles },
-            { label: "Modifications", value: stats.totalModifications },
-            { label: "Maintenance Records", value: stats.totalMaintenanceRecords },
-            { label: "Oldest Vehicle", value: stats.oldestVehicleYear ?? "—" },
-          ].map(({ label, value }) => (
-            <div
-              key={label}
-              className="rounded-xl border border-slate-800 bg-slate-900 p-5"
-            >
-              <p className="text-3xl font-bold text-white">{value}</p>
-              <p className="mt-1 text-sm text-slate-400">{label}</p>
-            </div>
-          ))}
-        </div>
-      </section>
 
       <section>
         <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-slate-400">
@@ -94,7 +55,7 @@ export default async function GaragePage() {
                     )}
                   </p>
                   <p className="mt-1 text-sm text-slate-400">
-                    {vehicle.color ? `${vehicle.color} · ` : ""}
+                    {vehicle.color ? `${vehicle.color} - ` : ""}
                     {displayMileage(vehicle.mileage, isMetric).toLocaleString()} {mileageLabel}
                   </p>
                 </div>
