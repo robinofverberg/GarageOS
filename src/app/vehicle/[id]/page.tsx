@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getVehicleById } from "@/lib/garage-data";
 import { DeleteVehicleButton } from "@/components/delete-vehicle-button";
+import { MaintenanceHistory } from "@/components/maintenance-history";
 import { displayMileage } from "@/lib/units";
 import { requireUser } from "@/lib/session";
 
@@ -193,45 +194,11 @@ export default async function VehicleDetailPage({
        )}
      </section>
 
-     <section>
-       <div className="mb-4 flex items-center justify-between">
-         <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400">
-           Maintenance History ({vehicle.maintenanceHistory.length})
-         </h2>
-       </div>
-       {vehicle.maintenanceHistory.length === 0 ? (
-         <p className="text-sm text-slate-500">No maintenance records yet.</p>
-       ) : (
-         <div className="space-y-3">
-           {vehicle.maintenanceHistory.map((record) => (
-            <div
-              key={record.id}
-              className="rounded-xl border border-slate-800 bg-slate-900 p-5"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <p className="font-medium text-white">{record.title}</p>
-                  <p className="mt-0.5 text-xs text-slate-500">
-                    {displayMileage(record.mileage, isMetric).toLocaleString()} {mileageLabel}
-                  </p>
-                </div>
-                <p className="text-sm text-slate-400">
-                  {new Date(record.date).toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                    timeZone: "UTC",
-                  })}
-                </p>
-              </div>
-              {record.notes && (
-                <p className="mt-3 text-sm text-slate-400">{record.notes}</p>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
+     <MaintenanceHistory
+       vehicleId={vehicle.id}
+       records={vehicle.maintenanceHistory}
+       isMetric={isMetric}
+     />
   </div>
  );
 }

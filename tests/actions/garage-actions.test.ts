@@ -8,6 +8,11 @@ const mocks = vi.hoisted(() => ({
   garageCreate: vi.fn(),
   garageUpdate: vi.fn(),
   vehicleCreate: vi.fn(),
+  vehicleFindFirst: vi.fn(),
+  maintenanceRecordCreate: vi.fn(),
+  maintenanceRecordFindFirst: vi.fn(),
+  maintenanceRecordUpdate: vi.fn(),
+  maintenanceRecordDelete: vi.fn(),
   revalidatePath: vi.fn(),
   redirect: vi.fn((url: string) => {
     throw new Error(`NEXT_REDIRECT:${url}`);
@@ -28,6 +33,13 @@ vi.mock("@/lib/prisma", () => ({
     },
     vehicle: {
       create: mocks.vehicleCreate,
+      findFirst: mocks.vehicleFindFirst,
+    },
+    maintenanceRecord: {
+      create: mocks.maintenanceRecordCreate,
+      findFirst: mocks.maintenanceRecordFindFirst,
+      update: mocks.maintenanceRecordUpdate,
+      delete: mocks.maintenanceRecordDelete,
     },
   },
 }));
@@ -40,7 +52,8 @@ vi.mock("next/navigation", () => ({
   redirect: mocks.redirect,
 }));
 
-const { createVehicle, updateGarageUnitSystem } = await import("@/app/garage/actions");
+const { createMaintenanceRecord, deleteMaintenanceRecord, createVehicle, updateGarageUnitSystem } =
+  await import("@/app/garage/actions");
 
 function form(entries: Record<string, string>) {
   const data = new FormData();
@@ -121,5 +134,71 @@ describe("garage server actions", () => {
         mileage: 160934,
       }),
     });
+  });
+
+  it("creates maintenance records with category, mileage, and cost", async () => {
+    mocks.vehicleFindFirst.mockResolvedValue({
+      id: "vehicle_1",
+      garage: { unitSystem: UnitSystem.Imperial },
+    });
+    mocks.maintenanceRecordCreate.mockResolvedValue({ id: "record_1" });
+
+    await createMaintenanceRecord(
+      "vehicle_1",
+      form({
+        title: "Annual inspection",
+        category: "Inspection",
+        performedAt: "2026-01-15",
+        mileage: "100000",
+        cost: "129.99",
+        notes: "Passed without remarks.",
+      })
+    );
+
+    expect(mocks.maintenanceRecordCreate).toHaveBeenCalledWith({
+      data: {
+        vehicleId: "vehicle_1",
+        title: "Annual inspection",
+        category: "Inspection",
+        performedAt: new Date("2026-01-15"),
+        mileage: 160934,
+        cost: 129.99,
+        notes: "Passed without remarks.",
+      },
+    });
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/garage");
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/vehicle/vehicle_1");
+  });
+
+  it("rejects invalid maintenance categories", async () => {
+    mocks.vehicleFindFirst.mockResolvedValue({
+      id: "vehicle_1",
+      garage: { unitSystem: UnitSystem.Metric },
+    });
+
+    await expect(
+      createMaintenanceRecord(
+        "vehicle_1",
+        form({
+          title: "Suspicious entry",
+          category: "Warranty",
+          performedAt: "2026-01-15",
+          mileage: "100000",
+          cost: "",
+          notes: "",
+        })
+      )
+    ).rejects.toThrow("Invalid maintenance category: Warranty");
+
+    expect(mocks.maintenanceRecordCreate).not.toHaveBeenCalled();
+  });
+
+  it("refuses to delete another user's maintenance record", async () => {
+    mocks.maintenanceRecordFindFirst.mockResolvedValue(null);
+
+    await expect(deleteMaintenanceRecord("record_1")).rejects.toThrow(
+      "Maintenance record not found."
+    );
+    expect(mocks.maintenanceRecordDelete).not.toHaveBeenCalled();
   });
 });

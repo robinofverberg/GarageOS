@@ -2,9 +2,9 @@ import "server-only";
 
 import { connection } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { BodyType, UnitSystem } from "@prisma/client";
+import { BodyType, MaintenanceCategory, UnitSystem } from "@prisma/client";
 
-export { BodyType, UnitSystem };
+export { BodyType, MaintenanceCategory, UnitSystem };
 
 export type ModificationDetail = {
   id: string;
@@ -17,8 +17,10 @@ export type ModificationDetail = {
 export type MaintenanceRecordDetail = {
   id: string;
   title: string;
+  category: MaintenanceCategory;
   date: string;
   mileage: number;
+  cost: number | null;
   notes: string | null;
 };
 
@@ -216,8 +218,10 @@ export async function getVehicleById(id: string, userId: string) {
       maintenanceHistory: vehicle.maintenanceRecords.map((record) => ({
         id: record.id,
         title: record.title,
+        category: record.category,
         date: record.performedAt.toISOString(),
         mileage: record.mileage,
+        cost: record.cost,
         notes: record.notes,
       })),
     } satisfies VehicleDetail,
