@@ -1,0 +1,2 @@
+ALTER TABLE "Modification"
+ADD COLUMN "mileage" INTEGER NOT NULL DEFAULT 0;
