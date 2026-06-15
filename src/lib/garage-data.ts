@@ -2,6 +2,9 @@ import "server-only";
 
 import { connection } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { BodyType, UnitSystem } from "@prisma/client";
+
+export { BodyType, UnitSystem };
 
 export type ModificationDetail = {
   id: string;
@@ -21,6 +24,7 @@ export type MaintenanceRecordDetail = {
 
 export type VehicleListItem = {
   id: string;
+  nickname: string | null;
   year: number;
   make: string;
   model: string;
@@ -33,13 +37,22 @@ export type VehicleListItem = {
 
 export type VehicleDetail = {
   id: string;
+  nickname: string | null;
   year: number;
   make: string;
   model: string;
   trim: string | null;
+  registrationNumber: string | null;
+  bodyType: BodyType | null;
+  engine: string | null;
+  transmission: string | null;
+  fuelType: string | null;
+  horsepower: number | null;
+  torque: number | null;
   color: string | null;
   mileage: number;
   purchasedAt: string | null;
+  purchasePrice: number | null;
   notes: string | null;
   modifications: ModificationDetail[];
   maintenanceHistory: MaintenanceRecordDetail[];
@@ -52,11 +65,32 @@ export type GarageStats = {
   oldestVehicleYear: number | null;
 };
 
-export async function getGarageOverview() {
+export type GarageOverview = {
+  stats: GarageStats;
+  vehicles: VehicleListItem[];
+  unitSystem: UnitSystem;
+};
+
+export async function getGarageUnitSystem(): Promise<UnitSystem> {
   await connection();
 
-  const [vehicles, vehicleAggregate, totalModifications, totalMaintenanceRecords] =
+  const garage = await prisma.garage.findFirst({
+    select: { unitSystem: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return garage?.unitSystem ?? UnitSystem.Imperial;
+}
+
+export async function getGarageOverview(): Promise<GarageOverview> {
+  await connection();
+
+  const [garage, vehicles, vehicleAggregate, totalModifications, totalMaintenanceRecords] =
     await prisma.$transaction([
+      prisma.garage.findFirst({
+        select: { unitSystem: true },
+        orderBy: { createdAt: "asc" },
+      }),
       prisma.vehicle.findMany({
         orderBy: [{ year: "asc" }, { make: "asc" }, { model: "asc" }],
         include: {
@@ -89,6 +123,7 @@ export async function getGarageOverview() {
     } satisfies GarageStats,
     vehicles: vehicles.map((vehicle) => ({
       id: vehicle.id,
+      nickname: vehicle.nickname,
       year: vehicle.year,
       make: vehicle.make,
       model: vehicle.model,
@@ -98,6 +133,7 @@ export async function getGarageOverview() {
       modificationCount: vehicle._count.modifications,
       maintenanceRecordCount: vehicle._count.maintenanceRecords,
     })) satisfies VehicleListItem[],
+    unitSystem: garage?.unitSystem ?? UnitSystem.Imperial,
   };
 }
 
@@ -113,6 +149,9 @@ export async function getVehicleById(id: string) {
       maintenanceRecords: {
         orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
       },
+      garage: {
+        select: { unitSystem: true },
+      },
     },
   });
 
@@ -121,28 +160,40 @@ export async function getVehicleById(id: string) {
   }
 
   return {
-    id: vehicle.id,
-    year: vehicle.year,
-    make: vehicle.make,
-    model: vehicle.model,
-    trim: vehicle.trim,
-    color: vehicle.color,
-    mileage: vehicle.mileage,
-    purchasedAt: vehicle.purchasedAt?.toISOString().slice(0, 10) ?? null,
-    notes: vehicle.notes,
-    modifications: vehicle.modifications.map((modification) => ({
-      id: modification.id,
-      name: modification.name,
-      category: modification.category,
-      installedAt: modification.installedAt.toISOString(),
-      notes: modification.notes,
-    })),
-    maintenanceHistory: vehicle.maintenanceRecords.map((record) => ({
-      id: record.id,
-      title: record.title,
-      date: record.performedAt.toISOString(),
-      mileage: record.mileage,
-      notes: record.notes,
-    })),
-  } satisfies VehicleDetail;
+    vehicle: {
+      id: vehicle.id,
+      nickname: vehicle.nickname,
+      year: vehicle.year,
+      make: vehicle.make,
+      model: vehicle.model,
+      trim: vehicle.trim,
+      registrationNumber: vehicle.registrationNumber,
+      bodyType: vehicle.bodyType,
+      engine: vehicle.engine,
+      transmission: vehicle.transmission,
+      fuelType: vehicle.fuelType,
+      horsepower: vehicle.horsepower,
+      torque: vehicle.torque,
+      color: vehicle.color,
+      mileage: vehicle.mileage,
+      purchasedAt: vehicle.purchasedAt?.toISOString().slice(0, 10) ?? null,
+      purchasePrice: vehicle.purchasePrice,
+      notes: vehicle.notes,
+      modifications: vehicle.modifications.map((modification) => ({
+        id: modification.id,
+        name: modification.name,
+        category: modification.category,
+        installedAt: modification.installedAt.toISOString(),
+        notes: modification.notes,
+      })),
+      maintenanceHistory: vehicle.maintenanceRecords.map((record) => ({
+        id: record.id,
+        title: record.title,
+        date: record.performedAt.toISOString(),
+        mileage: record.mileage,
+        notes: record.notes,
+      })),
+    } satisfies VehicleDetail,
+    unitSystem: vehicle.garage.unitSystem,
+  };
 }

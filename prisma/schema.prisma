@@ -11,13 +11,32 @@ datasource db {
   provider = "postgresql"
 }
 
+enum BodyType {
+  Sedan
+  Wagon
+  Coupe
+  Cabriolet
+  Hatchback
+  SUV
+  Van
+  Pickup
+  Motorcycle
+  Other
+}
+
+enum UnitSystem {
+  Metric
+  Imperial
+}
+
 model Garage {
-  id          String    @id @default(cuid())
-  slug        String    @unique
+  id          String     @id @default(cuid())
+  slug        String     @unique
   name        String
   description String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  unitSystem  UnitSystem @default(Imperial)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
   vehicles    Vehicle[]
 }
 
@@ -25,13 +44,22 @@ model Vehicle {
   id                 String              @id @default(cuid())
   garageId           String
   garage             Garage              @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  nickname           String?
   year               Int
   make               String
   model              String
   trim               String?
+  registrationNumber String?
+  bodyType           BodyType?
+  engine             String?
+  transmission       String?
+  fuelType           String?
+  horsepower         Int?
+  torque             Int?
   color              String?
   mileage            Int                 @default(0)
   purchasedAt        DateTime?
+  purchasePrice      Float?
   notes              String?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt

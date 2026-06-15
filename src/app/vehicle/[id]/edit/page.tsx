@@ -8,11 +8,11 @@ export default async function EditVehiclePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const vehicle = await getVehicleById(id);
+  const result = await getVehicleById(id);
 
-  if (!vehicle) {
+  if (!result) {
     notFound();
   }
 
-  return <EditVehicleForm vehicle={vehicle} />;
+  return <EditVehicleForm vehicle={result.vehicle} unitSystem={result.unitSystem} />;
 }
