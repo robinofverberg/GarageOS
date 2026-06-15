@@ -11,6 +11,16 @@ datasource db {
   provider = "postgresql"
 }
 
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  garages      Garage[]
+}
+
 enum BodyType {
   Sedan
   Wagon
@@ -31,6 +41,8 @@ enum UnitSystem {
 
 model Garage {
   id          String     @id @default(cuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   slug        String     @unique
   name        String
   description String?
@@ -38,6 +50,8 @@ model Garage {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   vehicles    Vehicle[]
+
+  @@index([userId])
 }
 
 model Vehicle {

@@ -65,9 +65,17 @@ Create a `.env` file in the project root with:
 
 ```env
 DATABASE_URL="postgresql://postgres:YOUR_POSTGRES_PASSWORD@localhost:5432/garageos?schema=public"
+AUTH_SECRET="your-random-secret-at-least-32-chars"
 ```
 
 Replace `YOUR_POSTGRES_PASSWORD` with your real PostgreSQL password.
+
+
+`AUTH_SECRET` is used to sign session cookies. Generate a strong random value:
+
+```powershell
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
 
 ### 6. Apply database migrations
 

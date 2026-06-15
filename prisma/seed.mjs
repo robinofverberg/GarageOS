@@ -10,8 +10,34 @@ if (!connectionString) {
 const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 
+// PBKDF2 password hashing — same algorithm as src/lib/password.ts
+async function hashPassword(password) {
+  const encoder = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const hash = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", hash: "SHA-256", salt, iterations: 100_000 },
+    key,
+    256
+  );
+  const saltHex = Buffer.from(salt).toString("hex");
+  const hashHex = Buffer.from(hash).toString("hex");
+  return `${saltHex}:${hashHex}`;
+}
+
+const demoUser = {
+  email: "demo@example.com",
+  password: "demo1234",
+  name: "Demo User",
+};
+
 const garageData = {
-  slug: "demo-garage",
   name: "Demo Garage",
   description: "Demo GarageOS collection seeded for local development.",
   vehicles: [
@@ -136,10 +162,21 @@ async function main() {
   await prisma.maintenanceRecord.deleteMany();
   await prisma.vehicle.deleteMany();
   await prisma.garage.deleteMany();
+  await prisma.user.deleteMany();
+
+  const passwordHash = await hashPassword(demoUser.password);
+  const user = await prisma.user.create({
+    data: {
+      email: demoUser.email,
+      passwordHash,
+      name: demoUser.name,
+    },
+  });
 
   await prisma.garage.create({
     data: {
-      slug: garageData.slug,
+      userId: user.id,
+      slug: user.id,
       name: garageData.name,
       description: garageData.description,
       vehicles: {
@@ -162,6 +199,8 @@ async function main() {
       },
     },
   });
+
+  console.log(`\n✓ Seeded demo user: ${demoUser.email} / ${demoUser.password}\n`);
 }
 
 main()

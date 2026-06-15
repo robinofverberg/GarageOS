@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/session";
 import { BodyType, UnitSystem } from "@prisma/client";
 import { inputMileageToKm } from "@/lib/units";
 
@@ -27,7 +28,8 @@ type VehicleInput = {
 };
 
 export async function createVehicle(formData: FormData) {
-  const garageId = await getPrimaryGarageId();
+  const user = await requireUser();
+  const garageId = await getPrimaryGarageId(user.sub);
   const garage = await prisma.garage.findUnique({
     where: { id: garageId },
     select: { unitSystem: true },
@@ -49,11 +51,15 @@ export async function createVehicle(formData: FormData) {
 }
 
 export async function updateVehicle(vehicleId: string, formData: FormData) {
-  const existing = await prisma.vehicle.findUnique({
-    where: { id: vehicleId },
+  const user = await requireUser();
+  const existing = await prisma.vehicle.findFirst({
+    where: { id: vehicleId, garage: { userId: user.sub } },
     select: { garage: { select: { unitSystem: true } } },
   });
-  const isMetric = existing?.garage.unitSystem === UnitSystem.Metric;
+  if (!existing) {
+    throw new Error("Vehicle not found.");
+  }
+  const isMetric = existing.garage.unitSystem === UnitSystem.Metric;
   const input = parseVehicleInput(formData);
 
   await prisma.vehicle.update({
@@ -69,8 +75,9 @@ export async function updateVehicle(vehicleId: string, formData: FormData) {
 }
 
 export async function deleteVehicle(vehicleId: string) {
-  await prisma.vehicle.delete({
-    where: { id: vehicleId },
+  const user = await requireUser();
+  await prisma.vehicle.deleteMany({
+    where: { id: vehicleId, garage: { userId: user.sub } },
   });
 
   revalidatePath("/garage");
@@ -79,6 +86,7 @@ export async function deleteVehicle(vehicleId: string) {
 }
 
 export async function updateGarageUnitSystem(formData: FormData) {
+  const user = await requireUser();
   const value = formData.get("unitSystem");
 
   if (value !== "Metric" && value !== "Imperial") {
@@ -86,6 +94,7 @@ export async function updateGarageUnitSystem(formData: FormData) {
   }
 
   const garage = await prisma.garage.findFirst({
+    where: { userId: user.sub },
     select: { id: true },
     orderBy: { createdAt: "asc" },
   });
@@ -103,8 +112,9 @@ export async function updateGarageUnitSystem(formData: FormData) {
   revalidatePath("/vehicle");
 }
 
-async function getPrimaryGarageId() {
+async function getPrimaryGarageId(userId: string): Promise<string> {
   const existingGarage = await prisma.garage.findFirst({
+    where: { userId },
     select: { id: true },
     orderBy: { createdAt: "asc" },
   });
@@ -115,9 +125,10 @@ async function getPrimaryGarageId() {
 
   const garage = await prisma.garage.create({
     data: {
-      slug: "default-garage",
-      name: "Default Garage",
-      description: "Automatically created GarageOS garage.",
+      userId,
+      slug: userId,
+      name: "My Garage",
+      description: "My GarageOS garage.",
     },
     select: { id: true },
   });

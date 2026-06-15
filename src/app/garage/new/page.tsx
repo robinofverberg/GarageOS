@@ -2,6 +2,9 @@ import Link from "next/link";
 import { createVehicle } from "@/app/garage/actions";
 import { SubmitButton } from "@/components/submit-button";
 import { getGarageUnitSystem } from "@/lib/garage-data";
+import { requireUser } from "@/lib/session";
+
+export const dynamic = "force-dynamic";
 
 const currentYear = new Date().getFullYear();
 
@@ -19,7 +22,8 @@ const bodyTypeOptions = [
 ];
 
 export default async function NewVehiclePage() {
-  const unitSystem = await getGarageUnitSystem();
+  const user = await requireUser();
+  const unitSystem = await getGarageUnitSystem(user.sub);
   const isMetric = unitSystem === "Metric";
   const mileageLabel = isMetric ? "km" : "mi";
   return (
