@@ -47,6 +47,17 @@ type MaintenanceRecordInput = {
   notes: string | null;
 };
 
+type ModificationInput = {
+  name: string;
+  category: string;
+  manufacturer: string | null;
+  productName: string | null;
+  installedAt: Date;
+  mileage: number;
+  cost: number | null;
+  notes: string | null;
+};
+
 export async function createVehicle(formData: FormData) {
   const user = await requireUser();
   const garageId = await getPrimaryGarageId(user.sub);
@@ -129,6 +140,8 @@ export async function createMaintenanceRecord(vehicleId: string, formData: FormD
 
   revalidatePath("/garage");
   revalidatePath(`/vehicle/${vehicleId}`);
+
+  redirect(`/vehicle/${vehicleId}`);
 }
 
 export async function updateMaintenanceRecord(recordId: string, formData: FormData) {
@@ -178,6 +191,83 @@ export async function deleteMaintenanceRecord(recordId: string) {
 
   revalidatePath("/garage");
   revalidatePath(`/vehicle/${record.vehicleId}`);
+}
+
+export async function createModification(vehicleId: string, formData: FormData) {
+  const user = await requireUser();
+  const vehicle = await prisma.vehicle.findFirst({
+    where: { id: vehicleId, garage: { userId: user.sub } },
+    select: { id: true, garage: { select: { unitSystem: true } } },
+  });
+
+  if (!vehicle) {
+    throw new Error("Vehicle not found.");
+  }
+
+  const isMetric = vehicle.garage.unitSystem === UnitSystem.Metric;
+  const input = parseModificationInput(formData);
+
+  await prisma.modification.create({
+    data: {
+      vehicleId,
+      ...input,
+      mileage: inputMileageToKm(input.mileage, isMetric),
+    },
+  });
+
+  revalidatePath("/garage");
+  revalidatePath(`/vehicle/${vehicleId}`);
+
+  redirect(`/vehicle/${vehicleId}`);
+}
+
+export async function updateModification(modificationId: string, formData: FormData) {
+  const user = await requireUser();
+  const modification = await prisma.modification.findFirst({
+    where: { id: modificationId, vehicle: { garage: { userId: user.sub } } },
+    select: {
+      id: true,
+      vehicleId: true,
+      vehicle: { select: { garage: { select: { unitSystem: true } } } },
+    },
+  });
+
+  if (!modification) {
+    throw new Error("Modification not found.");
+  }
+
+  const isMetric = modification.vehicle.garage.unitSystem === UnitSystem.Metric;
+  const input = parseModificationInput(formData);
+
+  await prisma.modification.update({
+    where: { id: modificationId },
+    data: {
+      ...input,
+      mileage: inputMileageToKm(input.mileage, isMetric),
+    },
+  });
+
+  revalidatePath("/garage");
+  revalidatePath(`/vehicle/${modification.vehicleId}`);
+}
+
+export async function deleteModification(modificationId: string) {
+  const user = await requireUser();
+  const modification = await prisma.modification.findFirst({
+    where: { id: modificationId, vehicle: { garage: { userId: user.sub } } },
+    select: { vehicleId: true },
+  });
+
+  if (!modification) {
+    throw new Error("Modification not found.");
+  }
+
+  await prisma.modification.delete({
+    where: { id: modificationId },
+  });
+
+  revalidatePath("/garage");
+  revalidatePath(`/vehicle/${modification.vehicleId}`);
 }
 
 export async function updateGarageUnitSystem(formData: FormData) {
@@ -267,6 +357,19 @@ function parseMaintenanceRecordInput(formData: FormData): MaintenanceRecordInput
     title: parseString(formData, "title", { required: true }),
     category: parseMaintenanceCategory(formData),
     performedAt: parsePastOrTodayDate(formData, "performedAt"),
+    mileage: parseInteger(formData, "mileage", { min: 0 }),
+    cost: parseOptionalPositiveFloat(formData, "cost"),
+    notes: parseOptionalString(formData, "notes"),
+  };
+}
+
+function parseModificationInput(formData: FormData): ModificationInput {
+  return {
+    name: parseString(formData, "name", { required: true }),
+    category: parseString(formData, "category", { required: true }),
+    manufacturer: parseOptionalString(formData, "manufacturer"),
+    productName: parseOptionalString(formData, "productName"),
+    installedAt: parsePastOrTodayDate(formData, "installedAt"),
     mileage: parseInteger(formData, "mileage", { min: 0 }),
     cost: parseOptionalPositiveFloat(formData, "cost"),
     notes: parseOptionalString(formData, "notes"),
@@ -435,3 +538,4 @@ function parsePastOrTodayDate(formData: FormData, field: string) {
 
   return parsedValue;
 }
+

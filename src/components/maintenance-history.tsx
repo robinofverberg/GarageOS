@@ -8,14 +8,17 @@ import {
   updateMaintenanceRecord,
 } from "@/app/garage/actions";
 import { SubmitButton } from "@/components/submit-button";
-import type { MaintenanceRecordDetail } from "@/lib/garage-data";
+import type { MaintenanceRecordDetail, ModificationDetail } from "@/lib/garage-data";
 import { displayMileage } from "@/lib/units";
 import type { MaintenanceCategory } from "@prisma/client";
 
 type MaintenanceHistoryProps = {
   vehicleId: string;
   records: MaintenanceRecordDetail[];
+  modifications: ModificationDetail[];
   isMetric: boolean;
+  initiallyAdding: boolean;
+  initialRange?: string;
 };
 
 const categoryOptions: { value: MaintenanceCategory; label: string }[] = [
@@ -38,16 +41,41 @@ const categoryStyles: Record<MaintenanceCategory, { dot: string; text: string }>
   Other: { dot: "bg-slate-300", text: "text-slate-300" },
 };
 
+type TimelineRange = "all" | "10y" | "5y" | "2y" | "1y";
+
+const rangeOptions: { value: TimelineRange; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "10y", label: "10Y" },
+  { value: "5y", label: "5Y" },
+  { value: "2y", label: "2Y" },
+  { value: "1y", label: "1Y" },
+];
+
 export function MaintenanceHistory({
   vehicleId,
   records,
+  modifications,
   isMetric,
+  initiallyAdding,
+  initialRange,
 }: MaintenanceHistoryProps) {
   const mileageLabel = isMetric ? "km" : "mi";
   const today = new Date();
   const todayValue = toDateInputValue(today);
-  const [selectedId, setSelectedId] = useState(records[0]?.id ?? null);
-  const selectedRecord = records.find((record) => record.id === selectedId) ?? records[0] ?? null;
+  const range = normalizeTimelineRange(initialRange);
+  const [selectedId, setSelectedId] = useState(
+    records[0]
+      ? timelineId("record", records[0].id)
+      : modifications[0]
+        ? timelineId("modification", modifications[0].id)
+        : null
+  );
+  const selectedRecord =
+    records.find((record) => timelineId("record", record.id) === selectedId) ?? null;
+  const selectedModification =
+    modifications.find((modification) => timelineId("modification", modification.id) === selectedId) ??
+    null;
+  const totalTimelineEvents = records.length + modifications.length;
   const timelineRecords = useMemo(
     () =>
       [...records].sort(
@@ -55,29 +83,83 @@ export function MaintenanceHistory({
       ),
     [records]
   );
+  const timelineModifications = useMemo(
+    () =>
+      [...modifications].sort(
+        (first, second) =>
+          new Date(first.installedAt).getTime() - new Date(second.installedAt).getTime()
+      ),
+    [modifications]
+  );
+  const rangeStartDate = getRangeStartDate(range, today);
+  const visibleTimelineRecords =
+    range === "all"
+      ? timelineRecords
+      : timelineRecords.filter((record) => new Date(record.date) >= rangeStartDate);
+  const visibleTimelineModifications =
+    range === "all"
+      ? timelineModifications
+      : timelineModifications.filter(
+          (modification) => new Date(modification.installedAt) >= rangeStartDate
+        );
+  const visibleTimelineEvents =
+    visibleTimelineRecords.length + visibleTimelineModifications.length;
 
-  const firstEventDate = timelineRecords[0] ? new Date(timelineRecords[0].date) : today;
-  const startDate = startOfDay(firstEventDate);
+  const firstEventTime = Math.min(
+    ...visibleTimelineRecords.map((record) => new Date(record.date).getTime()),
+    ...visibleTimelineModifications.map((modification) =>
+      new Date(modification.installedAt).getTime()
+    )
+  );
+  const firstEventDate = Number.isFinite(firstEventTime) ? new Date(firstEventTime) : rangeStartDate;
+  const startDate = startOfDay(range === "all" ? firstEventDate : rangeStartDate);
   const endDate = startOfDay(today);
   const totalTime = Math.max(1, endDate.getTime() - startDate.getTime());
-  const maxMileage = Math.max(0, ...records.map((record) => record.mileage));
-  const chartMaxMileage = maxMileage + 10000;
-  const chartPoints = timelineRecords.map((record) => ({
+  const maxMileage = Math.max(
+    0,
+    ...visibleTimelineRecords.map((record) => record.mileage),
+    ...visibleTimelineModifications.map((modification) => modification.mileage)
+  );
+  const chartMaxMileage = maxMileage + getChartMileagePadding(isMetric);
+  const chartPoints = visibleTimelineRecords.map((record) => ({
     record,
     ...getChartPosition(record, startDate, totalTime, chartMaxMileage),
   }));
+  const modificationPoints = visibleTimelineModifications.map((modification) => ({
+    modification,
+    ...getModificationChartPosition(modification, startDate, totalTime, chartMaxMileage),
+  }));
+  const timelinePoints = [
+    ...chartPoints.map((point) => ({
+      id: point.record.id,
+      selectionId: timelineId("record", point.record.id),
+      date: new Date(point.record.date),
+      x: point.x,
+      y: point.y,
+    })),
+    ...modificationPoints.map((point) => ({
+      id: point.modification.id,
+      selectionId: timelineId("modification", point.modification.id),
+      date: new Date(point.modification.installedAt),
+      x: point.x,
+      y: point.y,
+    })),
+  ].sort((first, second) => {
+    const timeDifference = first.date.getTime() - second.date.getTime();
+    return timeDifference === 0 ? first.id.localeCompare(second.id) : timeDifference;
+  });
   const xAxisTicks = getXAxisTicks(startDate, endDate, totalTime);
 
   return (
-    <section className="space-y-5">
+    <section id="vehicle-timeline" className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400">
-            Maintenance Timeline ({records.length})
+            Vehicle Timeline ({totalTimelineEvents})
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            {records.length === 0
-              ? "Add the first service, inspection, repair, or modification event."
+            {totalTimelineEvents === 0
+              ? "Add the first service, inspection, repair, or build-list install."
               : `${formatDate(startDate.toISOString())} to today`}
           </p>
         </div>
@@ -89,18 +171,48 @@ export function MaintenanceHistory({
             </span>
           ))}
         </div>
+        {!initiallyAdding && (
+          <a
+            href={`/vehicle/${vehicleId}?addEvent=1&range=${range}#add-event-form`}
+            className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:border-slate-600 hover:text-white"
+          >
+            Add Event
+          </a>
+        )}
       </div>
 
+      {totalTimelineEvents > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+          {rangeOptions.map((option) => (
+            <a
+              key={option.value}
+              href={`/vehicle/${vehicleId}?range=${option.value}#vehicle-timeline`}
+              className={`min-w-12 rounded-lg border px-3 py-1.5 font-medium transition ${
+                range === option.value
+                  ? "border-slate-500 bg-slate-800 text-white"
+                  : "border-slate-800 text-slate-400 hover:border-slate-700 hover:text-white"
+              }`}
+            >
+              {option.label}
+            </a>
+          ))}
+        </div>
+      )}
+
       <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-        {records.length === 0 ? (
+        {totalTimelineEvents === 0 ? (
           <div className="flex h-64 items-center justify-center border border-dashed border-slate-700 text-sm text-slate-500">
             No timeline events yet.
+          </div>
+        ) : visibleTimelineEvents === 0 ? (
+          <div className="flex h-64 items-center justify-center border border-dashed border-slate-700 text-sm text-slate-500">
+            No events in this range.
           </div>
         ) : (
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
             <div className="relative h-80 border-l border-b border-slate-700 pl-8 pr-4 pt-4">
               <div className="absolute left-2 top-3 text-xs text-slate-500">
-                {displayMileage(chartMaxMileage, isMetric).toLocaleString()} {mileageLabel}
+                {formatNumber(displayMileage(chartMaxMileage, isMetric))} {mileageLabel}
               </div>
               <div className="absolute bottom-12 left-2 text-xs text-slate-500">
                 0 {mileageLabel}
@@ -126,9 +238,9 @@ export function MaintenanceHistory({
                     strokeDasharray="3 5"
                   />
                 ))}
-                {chartPoints.length > 1 && (
+                {timelinePoints.length > 1 && (
                   <polyline
-                    points={chartPoints.map((point) => `${point.x},${point.y}`).join(" ")}
+                    points={timelinePoints.map((point) => `${point.x},${point.y}`).join(" ")}
                     fill="none"
                     stroke="#94a3b8"
                     strokeLinecap="round"
@@ -139,6 +251,24 @@ export function MaintenanceHistory({
                 )}
               </svg>
               <div className="absolute left-8 right-8 top-7 bottom-12">
+                {modificationPoints.map(({ modification, x, y }) => (
+                  <button
+                    key={modification.id}
+                    type="button"
+                    title={`${modification.name}: ${formatNumber(displayMileage(modification.mileage, isMetric))} ${mileageLabel}`}
+                    onClick={() => setSelectedId(timelineId("modification", modification.id))}
+                    onMouseEnter={() => setSelectedId(timelineId("modification", modification.id))}
+                    onFocus={() => setSelectedId(timelineId("modification", modification.id))}
+                    className={`absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-slate-950 bg-violet-400 outline-none ring-offset-2 ring-offset-slate-900 transition hover:scale-125 focus:ring-2 focus:ring-white ${
+                      selectedId === timelineId("modification", modification.id)
+                        ? "scale-125 ring-2 ring-white"
+                        : ""
+                    }`}
+                    style={{ left: `${x}%`, top: `${y}%` }}
+                  >
+                    <span className="sr-only">{modification.name}</span>
+                  </button>
+                ))}
                 {chartPoints.map(({ record, x, y }) => {
                   const style = categoryStyles[record.category];
 
@@ -146,12 +276,12 @@ export function MaintenanceHistory({
                     <button
                       key={record.id}
                       type="button"
-                      title={`${record.title}: ${displayMileage(record.mileage, isMetric).toLocaleString()} ${mileageLabel}`}
-                      onClick={() => setSelectedId(record.id)}
-                      onMouseEnter={() => setSelectedId(record.id)}
-                      onFocus={() => setSelectedId(record.id)}
+                      title={`${record.title}: ${formatNumber(displayMileage(record.mileage, isMetric))} ${mileageLabel}`}
+                      onClick={() => setSelectedId(timelineId("record", record.id))}
+                      onMouseEnter={() => setSelectedId(timelineId("record", record.id))}
+                      onFocus={() => setSelectedId(timelineId("record", record.id))}
                       className={`absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-slate-950 ${style.dot} outline-none ring-offset-2 ring-offset-slate-900 transition hover:scale-125 focus:ring-2 focus:ring-white ${
-                        selectedRecord?.id === record.id ? "scale-125 ring-2 ring-white" : ""
+                        selectedId === timelineId("record", record.id) ? "scale-125 ring-2 ring-white" : ""
                       }`}
                       style={{ left: `${x}%`, top: `${y}%` }}
                     >
@@ -179,40 +309,106 @@ export function MaintenanceHistory({
               </div>
             </div>
 
-            {selectedRecord && (
-              <div className="border-t border-slate-800 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
-                <p className={`text-xs font-semibold uppercase tracking-widest ${categoryStyles[selectedRecord.category].text}`}>
-                  {selectedRecord.category}
-                </p>
-                <h3 className="mt-2 text-lg font-semibold text-white">{selectedRecord.title}</h3>
-                <p className="mt-1 text-sm text-slate-400">
-                  {formatDate(selectedRecord.date)} at{" "}
-                  {displayMileage(selectedRecord.mileage, isMetric).toLocaleString()} {mileageLabel}
-                </p>
-                {selectedRecord.cost !== null && (
-                  <p className="mt-1 text-sm text-slate-400">
-                    Cost: {formatCost(selectedRecord.cost)}
+            <div className="space-y-5 border-t border-slate-800 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
+              {selectedRecord && (
+                <div>
+                  <p className={`text-xs font-semibold uppercase tracking-widest ${categoryStyles[selectedRecord.category].text}`}>
+                    {selectedRecord.category}
                   </p>
-                )}
-                {selectedRecord.notes && (
-                  <p className="mt-4 text-sm text-slate-300">{selectedRecord.notes}</p>
-                )}
+                  <h3 className="mt-2 text-lg font-semibold text-white">{selectedRecord.title}</h3>
+                  <p className="mt-1 text-sm text-slate-400">
+                    {formatDate(selectedRecord.date)} at{" "}
+                    {formatNumber(displayMileage(selectedRecord.mileage, isMetric))} {mileageLabel}
+                  </p>
+                  {selectedRecord.cost !== null && (
+                    <p className="mt-1 text-sm text-slate-400">
+                      Cost: {formatCost(selectedRecord.cost)}
+                    </p>
+                  )}
+                  {selectedRecord.notes && (
+                    <p className="mt-4 text-sm text-slate-300">{selectedRecord.notes}</p>
+                  )}
+                </div>
+              )}
+              {selectedModification && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-violet-300">
+                    {selectedModification.category}
+                  </p>
+                  <h3 className="mt-2 text-lg font-semibold text-white">
+                    {selectedModification.name}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-400">
+                    {formatDate(selectedModification.installedAt)} at{" "}
+                    {formatNumber(displayMileage(selectedModification.mileage, isMetric))}{" "}
+                    {mileageLabel}
+                  </p>
+                  {(selectedModification.manufacturer || selectedModification.productName) && (
+                    <p className="mt-1 text-sm text-slate-400">
+                      {[selectedModification.manufacturer, selectedModification.productName]
+                        .filter(Boolean)
+                        .join(" - ")}
+                    </p>
+                  )}
+                  {selectedModification.cost !== null && (
+                    <p className="mt-1 text-sm text-slate-400">
+                      Cost: {formatCost(selectedModification.cost)}
+                    </p>
+                  )}
+                  {selectedModification.notes && (
+                    <p className="mt-4 text-sm text-slate-300">{selectedModification.notes}</p>
+                  )}
+                </div>
+              )}
+              {visibleTimelineModifications.length > 0 && (
+                <div className="border-t border-slate-800 pt-5">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-violet-300">
+                    Build Installs
+                  </p>
+                  <div className="mt-3 space-y-3">
+                    {visibleTimelineModifications.map((modification) => (
+                      <div key={modification.id} className="border-l border-violet-500/50 pl-3">
+                        <p className="text-sm font-medium text-white">{modification.name}</p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {formatDate(modification.installedAt)} - {modification.category} -{" "}
+                          {formatNumber(displayMileage(modification.mileage, isMetric))} {mileageLabel}
+                        </p>
+                        {(modification.manufacturer || modification.productName) && (
+                          <p className="mt-1 text-xs text-slate-400">
+                            {[modification.manufacturer, modification.productName]
+                              .filter(Boolean)
+                              .join(" - ")}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               </div>
-            )}
           </div>
         )}
       </div>
 
-      <form
-        action={createMaintenanceRecord.bind(null, vehicleId)}
-        className="rounded-xl border border-slate-800 bg-slate-900 p-5"
-      >
-        <h3 className="text-sm font-semibold text-white">Add Event</h3>
-        <MaintenanceFields isMetric={isMetric} maxDate={todayValue} />
-        <div className="mt-4">
-          <SubmitButton label="Add Event" pendingLabel="Adding..." />
-        </div>
-      </form>
+      {initiallyAdding && (
+        <form
+          id="add-event-form"
+          action={createMaintenanceRecord.bind(null, vehicleId)}
+          className="rounded-xl border border-slate-800 bg-slate-900 p-5"
+        >
+          <h3 className="text-sm font-semibold text-white">Add Event</h3>
+          <MaintenanceFields isMetric={isMetric} maxDate={todayValue} />
+          <div className="mt-4 flex flex-wrap gap-3">
+            <SubmitButton label="Add Event" pendingLabel="Adding..." />
+            <a
+              href={`/vehicle/${vehicleId}`}
+              className="rounded-lg border border-slate-700 px-5 py-2.5 text-sm font-medium text-slate-300 transition hover:border-slate-600 hover:text-white"
+            >
+              Cancel
+            </a>
+          </div>
+        </form>
+      )}
 
       {records.length > 0 && (
         <div className="space-y-3">
@@ -270,7 +466,7 @@ function MaintenanceRecordCard({
             <div>
               <p className="font-medium text-white">{record.title}</p>
               <p className="mt-0.5 text-xs text-slate-500">
-                {record.category} - {displayMileage(record.mileage, isMetric).toLocaleString()}{" "}
+                {record.category} - {formatNumber(displayMileage(record.mileage, isMetric))}{" "}
                 {mileageLabel}
                 {record.cost !== null ? ` - ${formatCost(record.cost)}` : ""}
               </p>
@@ -434,14 +630,57 @@ function getChartPosition(
   totalTime: number,
   chartMaxMileage: number
 ) {
-  const x =
-    ((startOfDay(new Date(record.date)).getTime() - startDate.getTime()) / totalTime) * 100;
+  const x = getDatePosition(new Date(record.date), startDate, totalTime);
   const y = 100 - (record.mileage / chartMaxMileage) * 100;
 
   return {
-    x: clampPercentage(x),
+    x,
     y: clampPercentage(y),
   };
+}
+
+function getModificationChartPosition(
+  modification: ModificationDetail,
+  startDate: Date,
+  totalTime: number,
+  chartMaxMileage: number
+) {
+  const x = getDatePosition(new Date(modification.installedAt), startDate, totalTime);
+  const y = 100 - (modification.mileage / chartMaxMileage) * 100;
+
+  return {
+    x,
+    y: clampPercentage(y),
+  };
+}
+
+function getDatePosition(date: Date, startDate: Date, totalTime: number) {
+  return clampPercentage(((startOfDay(date).getTime() - startDate.getTime()) / totalTime) * 100);
+}
+
+function getRangeStartDate(range: TimelineRange, today: Date) {
+  const startDate = startOfDay(today);
+
+  switch (range) {
+    case "10y":
+      return new Date(startDate.getFullYear() - 10, startDate.getMonth(), startDate.getDate());
+    case "5y":
+      return new Date(startDate.getFullYear() - 5, startDate.getMonth(), startDate.getDate());
+    case "2y":
+      return new Date(startDate.getFullYear() - 2, startDate.getMonth(), startDate.getDate());
+    case "1y":
+      return new Date(startDate.getFullYear() - 1, startDate.getMonth(), startDate.getDate());
+    case "all":
+      return startDate;
+  }
+}
+
+function normalizeTimelineRange(value?: string): TimelineRange {
+  return rangeOptions.some((option) => option.value === value) ? (value as TimelineRange) : "all";
+}
+
+function getChartMileagePadding(isMetric: boolean) {
+  return isMetric ? 150_000 : 160_934;
 }
 
 function getXAxisTicks(startDate: Date, endDate: Date, totalTime: number) {
@@ -516,6 +755,14 @@ function formatCost(value: number) {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });
+}
+
+function formatNumber(value: number) {
+  return value.toLocaleString("en-US");
+}
+
+function timelineId(type: "record" | "modification", id: string) {
+  return `${type}:${id}`;
 }
 
 const inputClass =

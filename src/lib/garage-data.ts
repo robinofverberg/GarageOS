@@ -10,7 +10,11 @@ export type ModificationDetail = {
   id: string;
   name: string;
   category: string;
+  manufacturer: string | null;
+  productName: string | null;
   installedAt: string;
+  mileage: number;
+  cost: number | null;
   notes: string | null;
 };
 
@@ -212,7 +216,11 @@ export async function getVehicleById(id: string, userId: string) {
         id: modification.id,
         name: modification.name,
         category: modification.category,
+        manufacturer: modification.manufacturer,
+        productName: modification.productName,
         installedAt: modification.installedAt.toISOString(),
+        mileage: modification.mileage,
+        cost: modification.cost,
         notes: modification.notes,
       })),
       maintenanceHistory: vehicle.maintenanceRecords.map((record) => ({

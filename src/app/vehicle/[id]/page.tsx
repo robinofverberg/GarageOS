@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getVehicleById } from "@/lib/garage-data";
 import { DeleteVehicleButton } from "@/components/delete-vehicle-button";
 import { MaintenanceHistory } from "@/components/maintenance-history";
+import { ModificationList } from "@/components/modification-list";
 import { displayMileage } from "@/lib/units";
 import { requireUser } from "@/lib/session";
 
@@ -23,10 +24,13 @@ const bodyTypeLabels: Record<string, string> = {
 
 export default async function VehicleDetailPage({
  params,
+ searchParams,
 }: {
  params: Promise<{ id: string }>;
+ searchParams: Promise<{ addModification?: string; addEvent?: string; range?: string }>;
 }) {
  const { id } = await params;
+ const { addModification, addEvent, range } = await searchParams;
  const user = await requireUser();
  const result = await getVehicleById(id, user.sub);
 
@@ -157,47 +161,20 @@ export default async function VehicleDetailPage({
        </section>
      )}
 
-     <section>
-       <div className="mb-4 flex items-center justify-between">
-         <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400">
-           Modifications ({vehicle.modifications.length})
-         </h2>
-       </div>
-       {vehicle.modifications.length === 0 ? (
-         <p className="text-sm text-slate-500">No modifications recorded yet.</p>
-       ) : (
-         <div className="space-y-3">
-           {vehicle.modifications.map((mod) => (
-             <div
-               key={mod.id}
-               className="rounded-xl border border-slate-800 bg-slate-900 p-5"
-             >
-               <div className="flex flex-wrap items-start justify-between gap-2">
-                 <div>
-                   <p className="font-medium text-white">{mod.name}</p>
-                   <p className="mt-0.5 text-xs text-slate-500">{mod.category}</p>
-                 </div>
-                 <p className="text-sm text-slate-400">
-                   {new Date(mod.installedAt).toLocaleDateString("en-US", {
-                     year: "numeric",
-                     month: "short",
-                     timeZone: "UTC",
-                   })}
-                 </p>
-               </div>
-               {mod.notes && (
-                 <p className="mt-3 text-sm text-slate-400">{mod.notes}</p>
-               )}
-             </div>
-           ))}
-         </div>
-       )}
-     </section>
+     <ModificationList
+       vehicleId={vehicle.id}
+       modifications={vehicle.modifications}
+       isMetric={isMetric}
+       initiallyAdding={addModification === "1"}
+     />
 
      <MaintenanceHistory
        vehicleId={vehicle.id}
        records={vehicle.maintenanceHistory}
+       modifications={vehicle.modifications}
        isMetric={isMetric}
+       initiallyAdding={addEvent === "1"}
+       initialRange={range}
      />
   </div>
  );

@@ -143,17 +143,19 @@ describe("garage server actions", () => {
     });
     mocks.maintenanceRecordCreate.mockResolvedValue({ id: "record_1" });
 
-    await createMaintenanceRecord(
-      "vehicle_1",
-      form({
-        title: "Annual inspection",
-        category: "Inspection",
-        performedAt: "2026-01-15",
-        mileage: "100000",
-        cost: "129.99",
-        notes: "Passed without remarks.",
-      })
-    );
+    await expect(
+      createMaintenanceRecord(
+        "vehicle_1",
+        form({
+          title: "Annual inspection",
+          category: "Inspection",
+          performedAt: "2026-01-15",
+          mileage: "100000",
+          cost: "129.99",
+          notes: "Passed without remarks.",
+        })
+      )
+    ).rejects.toThrow("NEXT_REDIRECT:/vehicle/vehicle_1");
 
     expect(mocks.maintenanceRecordCreate).toHaveBeenCalledWith({
       data: {
