@@ -18,6 +18,7 @@ type MaintenanceHistoryProps = {
   modifications: ModificationDetail[];
   isMetric: boolean;
   initiallyAdding: boolean;
+  initialRange?: string;
 };
 
 const categoryOptions: { value: MaintenanceCategory; label: string }[] = [
@@ -40,16 +41,28 @@ const categoryStyles: Record<MaintenanceCategory, { dot: string; text: string }>
   Other: { dot: "bg-slate-300", text: "text-slate-300" },
 };
 
+type TimelineRange = "all" | "10y" | "5y" | "2y" | "1y";
+
+const rangeOptions: { value: TimelineRange; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "10y", label: "10Y" },
+  { value: "5y", label: "5Y" },
+  { value: "2y", label: "2Y" },
+  { value: "1y", label: "1Y" },
+];
+
 export function MaintenanceHistory({
   vehicleId,
   records,
   modifications,
   isMetric,
   initiallyAdding,
+  initialRange,
 }: MaintenanceHistoryProps) {
   const mileageLabel = isMetric ? "km" : "mi";
   const today = new Date();
   const todayValue = toDateInputValue(today);
+  const range = normalizeTimelineRange(initialRange);
   const [selectedId, setSelectedId] = useState(
     records[0]
       ? timelineId("record", records[0].id)
@@ -78,26 +91,41 @@ export function MaintenanceHistory({
       ),
     [modifications]
   );
+  const rangeStartDate = getRangeStartDate(range, today);
+  const visibleTimelineRecords =
+    range === "all"
+      ? timelineRecords
+      : timelineRecords.filter((record) => new Date(record.date) >= rangeStartDate);
+  const visibleTimelineModifications =
+    range === "all"
+      ? timelineModifications
+      : timelineModifications.filter(
+          (modification) => new Date(modification.installedAt) >= rangeStartDate
+        );
+  const visibleTimelineEvents =
+    visibleTimelineRecords.length + visibleTimelineModifications.length;
 
   const firstEventTime = Math.min(
-    ...timelineRecords.map((record) => new Date(record.date).getTime()),
-    ...timelineModifications.map((modification) => new Date(modification.installedAt).getTime())
+    ...visibleTimelineRecords.map((record) => new Date(record.date).getTime()),
+    ...visibleTimelineModifications.map((modification) =>
+      new Date(modification.installedAt).getTime()
+    )
   );
-  const firstEventDate = Number.isFinite(firstEventTime) ? new Date(firstEventTime) : today;
-  const startDate = startOfDay(firstEventDate);
+  const firstEventDate = Number.isFinite(firstEventTime) ? new Date(firstEventTime) : rangeStartDate;
+  const startDate = startOfDay(range === "all" ? firstEventDate : rangeStartDate);
   const endDate = startOfDay(today);
   const totalTime = Math.max(1, endDate.getTime() - startDate.getTime());
   const maxMileage = Math.max(
     0,
-    ...records.map((record) => record.mileage),
-    ...timelineModifications.map((modification) => modification.mileage)
+    ...visibleTimelineRecords.map((record) => record.mileage),
+    ...visibleTimelineModifications.map((modification) => modification.mileage)
   );
-  const chartMaxMileage = maxMileage + 10000;
-  const chartPoints = timelineRecords.map((record) => ({
+  const chartMaxMileage = maxMileage + getChartMileagePadding(isMetric);
+  const chartPoints = visibleTimelineRecords.map((record) => ({
     record,
     ...getChartPosition(record, startDate, totalTime, chartMaxMileage),
   }));
-  const modificationPoints = timelineModifications.map((modification) => ({
+  const modificationPoints = visibleTimelineModifications.map((modification) => ({
     modification,
     ...getModificationChartPosition(modification, startDate, totalTime, chartMaxMileage),
   }));
@@ -123,7 +151,7 @@ export function MaintenanceHistory({
   const xAxisTicks = getXAxisTicks(startDate, endDate, totalTime);
 
   return (
-    <section className="space-y-5">
+    <section id="vehicle-timeline" className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400">
@@ -145,7 +173,7 @@ export function MaintenanceHistory({
         </div>
         {!initiallyAdding && (
           <a
-            href={`/vehicle/${vehicleId}?addEvent=1`}
+            href={`/vehicle/${vehicleId}?addEvent=1&range=${range}#add-event-form`}
             className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:border-slate-600 hover:text-white"
           >
             Add Event
@@ -153,10 +181,32 @@ export function MaintenanceHistory({
         )}
       </div>
 
+      {totalTimelineEvents > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+          {rangeOptions.map((option) => (
+            <a
+              key={option.value}
+              href={`/vehicle/${vehicleId}?range=${option.value}#vehicle-timeline`}
+              className={`min-w-12 rounded-lg border px-3 py-1.5 font-medium transition ${
+                range === option.value
+                  ? "border-slate-500 bg-slate-800 text-white"
+                  : "border-slate-800 text-slate-400 hover:border-slate-700 hover:text-white"
+              }`}
+            >
+              {option.label}
+            </a>
+          ))}
+        </div>
+      )}
+
       <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
         {totalTimelineEvents === 0 ? (
           <div className="flex h-64 items-center justify-center border border-dashed border-slate-700 text-sm text-slate-500">
             No timeline events yet.
+          </div>
+        ) : visibleTimelineEvents === 0 ? (
+          <div className="flex h-64 items-center justify-center border border-dashed border-slate-700 text-sm text-slate-500">
+            No events in this range.
           </div>
         ) : (
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
@@ -310,13 +360,13 @@ export function MaintenanceHistory({
                   )}
                 </div>
               )}
-              {timelineModifications.length > 0 && (
+              {visibleTimelineModifications.length > 0 && (
                 <div className="border-t border-slate-800 pt-5">
                   <p className="text-xs font-semibold uppercase tracking-widest text-violet-300">
                     Build Installs
                   </p>
                   <div className="mt-3 space-y-3">
-                    {timelineModifications.map((modification) => (
+                    {visibleTimelineModifications.map((modification) => (
                       <div key={modification.id} className="border-l border-violet-500/50 pl-3">
                         <p className="text-sm font-medium text-white">{modification.name}</p>
                         <p className="mt-0.5 text-xs text-slate-500">
@@ -342,6 +392,7 @@ export function MaintenanceHistory({
 
       {initiallyAdding && (
         <form
+          id="add-event-form"
           action={createMaintenanceRecord.bind(null, vehicleId)}
           className="rounded-xl border border-slate-800 bg-slate-900 p-5"
         >
@@ -605,6 +656,31 @@ function getModificationChartPosition(
 
 function getDatePosition(date: Date, startDate: Date, totalTime: number) {
   return clampPercentage(((startOfDay(date).getTime() - startDate.getTime()) / totalTime) * 100);
+}
+
+function getRangeStartDate(range: TimelineRange, today: Date) {
+  const startDate = startOfDay(today);
+
+  switch (range) {
+    case "10y":
+      return new Date(startDate.getFullYear() - 10, startDate.getMonth(), startDate.getDate());
+    case "5y":
+      return new Date(startDate.getFullYear() - 5, startDate.getMonth(), startDate.getDate());
+    case "2y":
+      return new Date(startDate.getFullYear() - 2, startDate.getMonth(), startDate.getDate());
+    case "1y":
+      return new Date(startDate.getFullYear() - 1, startDate.getMonth(), startDate.getDate());
+    case "all":
+      return startDate;
+  }
+}
+
+function normalizeTimelineRange(value?: string): TimelineRange {
+  return rangeOptions.some((option) => option.value === value) ? (value as TimelineRange) : "all";
+}
+
+function getChartMileagePadding(isMetric: boolean) {
+  return isMetric ? 150_000 : 160_934;
 }
 
 function getXAxisTicks(startDate: Date, endDate: Date, totalTime: number) {

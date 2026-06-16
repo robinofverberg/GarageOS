@@ -27,10 +27,10 @@ export default async function VehicleDetailPage({
  searchParams,
 }: {
  params: Promise<{ id: string }>;
- searchParams: Promise<{ addModification?: string; addEvent?: string }>;
+ searchParams: Promise<{ addModification?: string; addEvent?: string; range?: string }>;
 }) {
  const { id } = await params;
- const { addModification, addEvent } = await searchParams;
+ const { addModification, addEvent, range } = await searchParams;
  const user = await requireUser();
  const result = await getVehicleById(id, user.sub);
 
@@ -174,6 +174,7 @@ export default async function VehicleDetailPage({
        modifications={vehicle.modifications}
        isMetric={isMetric}
        initiallyAdding={addEvent === "1"}
+       initialRange={range}
      />
   </div>
  );

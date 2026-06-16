@@ -60,7 +60,7 @@ export function ModificationList({
         </div>
         {!initiallyAdding && (
           <a
-            href={`/vehicle/${vehicleId}?addModification=1`}
+            href={`/vehicle/${vehicleId}?addModification=1#add-modification-form`}
             className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:border-slate-600 hover:text-white"
           >
             Add Modification
@@ -70,6 +70,7 @@ export function ModificationList({
 
       {initiallyAdding && (
         <form
+          id="add-modification-form"
           action={createModification.bind(null, vehicleId)}
           className="rounded-xl border border-slate-800 bg-slate-900 p-5"
         >
