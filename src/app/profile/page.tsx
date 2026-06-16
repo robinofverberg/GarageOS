@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/session";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 import { logoutUser } from "@/app/auth/actions";
 import { updateGarageUnitSystem } from "@/app/garage/actions";
 import { SubmitButton } from "@/components/submit-button";
@@ -9,17 +9,17 @@ export const dynamic = "force-dynamic";
 export default async function ProfilePage() {
   const user = await requireUser();
 
-  const garage = await prisma.garage.findFirst({
-    where: { userId: user.sub },
-    select: {
-      unitSystem: true,
-      _count: { select: { vehicles: true } },
-    },
-    orderBy: { createdAt: "asc" },
-  });
+  const { data: garage } = await supabase
+    .from("Garage")
+    .select("unitSystem, Vehicle(count)")
+    .eq("userId", user.sub)
+    .order("createdAt", { ascending: true })
+    .limit(1)
+    .maybeSingle();
 
-  const vehicleCount = garage?._count.vehicles ?? 0;
-  const unitSystem = garage?.unitSystem ?? "Imperial";
+  const vehicleCount =
+    (garage?.Vehicle as { count: number }[] | undefined)?.[0]?.count ?? 0;
+  const unitSystem = (garage?.unitSystem as string | undefined) ?? "Imperial";
   const nextUnitSystem = unitSystem === "Metric" ? "Imperial" : "Metric";
   const mileageLabel = unitSystem === "Metric" ? "kilometers" : "miles";
 

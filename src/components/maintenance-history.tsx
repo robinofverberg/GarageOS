@@ -11,7 +11,7 @@ import {
 import { SubmitButton } from "@/components/submit-button";
 import type { MaintenanceRecordDetail, ModificationDetail } from "@/lib/garage-data";
 import { displayMileage } from "@/lib/units";
-import type { MaintenanceCategory } from "@prisma/client";
+import type { MaintenanceCategory } from "@/lib/garage-data";
 
 type MaintenanceHistoryProps = {
   vehicleId: string;

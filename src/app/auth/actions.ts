@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { supabase, newId, now } from "@/lib/supabase";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { createSession, deleteSession } from "@/lib/session";
 
@@ -24,23 +24,37 @@ export async function registerUser(
 
   const emailLower = email.trim().toLowerCase();
 
-  const existing = await prisma.user.findUnique({
-    where: { email: emailLower },
-  });
+  const { data: existing } = await supabase
+    .from("User")
+    .select("id")
+    .eq("email", emailLower)
+    .maybeSingle();
   if (existing) {
     return { error: "An account with this email already exists." };
   }
 
   const passwordHash = await hashPassword(password);
-  const user = await prisma.user.create({
-    data: {
+  const { data: user, error } = await supabase
+    .from("User")
+    .insert({
+      id: newId(),
       email: emailLower,
       passwordHash,
       name: typeof name === "string" ? name.trim() || null : null,
-    },
-  });
+      updatedAt: now(),
+    })
+    .select("id, email, name")
+    .single();
 
-  await createSession({ sub: user.id, email: user.email, name: user.name });
+  if (error || !user) {
+    return { error: "Could not create account. Please try again." };
+  }
+
+  await createSession({
+    sub: user.id as string,
+    email: user.email as string,
+    name: user.name as string | null,
+  });
 
   redirect("/garage");
 }
@@ -56,15 +70,21 @@ export async function loginUser(
     return { error: "Email and password are required." };
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email: email.trim().toLowerCase() },
-  });
+  const { data: user } = await supabase
+    .from("User")
+    .select("id, email, name, passwordHash")
+    .eq("email", email.trim().toLowerCase())
+    .maybeSingle();
 
-  if (!user || !(await verifyPassword(password, user.passwordHash))) {
+  if (!user || !(await verifyPassword(password, user.passwordHash as string))) {
     return { error: "Invalid email or password." };
   }
 
-  await createSession({ sub: user.id, email: user.email, name: user.name });
+  await createSession({
+    sub: user.id as string,
+    email: user.email as string,
+    name: user.name as string | null,
+  });
 
   redirect("/garage");
 }
