@@ -17,14 +17,13 @@ const command = join(
   process.cwd(),
   "node_modules",
   ".bin",
-  process.platform === "win32" ? "prisma.cmd" : "prisma"
+  process.platform === "win32" ? "supabase.cmd" : "supabase"
 );
 const result = spawnSync(
   command,
-  ["migrate", "reset", "--force"],
+  ["db", "reset", "--db-url", databaseUrl],
   {
     stdio: "inherit",
-    env: { ...process.env, DATABASE_URL: databaseUrl },
     shell: process.platform === "win32",
   }
 );

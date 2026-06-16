@@ -2,7 +2,7 @@ import Link from "next/link";
 import { updateVehicle } from "@/app/garage/actions";
 import { SubmitButton } from "@/components/submit-button";
 import type { VehicleDetail } from "@/lib/garage-data";
-import type { UnitSystem } from "@prisma/client";
+import type { UnitSystem } from "@/lib/garage-data";
 import { displayMileage } from "@/lib/units";
 
 const currentYear = new Date().getFullYear();
