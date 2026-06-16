@@ -1,9 +1,11 @@
 import Link from "next/link";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { getVehicleById } from "@/lib/garage-data";
 import { DeleteVehicleButton } from "@/components/delete-vehicle-button";
 import { MaintenanceHistory } from "@/components/maintenance-history";
 import { ModificationList } from "@/components/modification-list";
+import { PhotoGallery } from "@/components/photo-gallery";
 import { displayMileage } from "@/lib/units";
 import { requireUser } from "@/lib/session";
 
@@ -43,6 +45,8 @@ export default async function VehicleDetailPage({
  const mileageLabel = isMetric ? "km" : "mi";
 
  const vehicleTitle = `${vehicle.year} ${vehicle.make} ${vehicle.model}${vehicle.trim ? ` ${vehicle.trim}` : ""}`;
+ const featuredPhoto =
+   vehicle.photos.find((photo) => photo.id === vehicle.featuredPhotoId) ?? vehicle.photos[0] ?? null;
 
  return (
    <div className="space-y-10">
@@ -92,11 +96,45 @@ export default async function VehicleDetailPage({
        </div>
      </div>
 
+     <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+       {featuredPhoto ? (
+         <div className="relative aspect-[16/9] min-h-72">
+           <Image
+             src={featuredPhoto.url}
+             alt={featuredPhoto.caption ?? vehicleTitle}
+             fill
+             priority
+             sizes="(min-width: 1024px) 1024px, 100vw"
+             className="object-cover"
+           />
+           <div className="absolute inset-x-0 bottom-0 bg-slate-950/80 p-5 backdrop-blur">
+             <p className="text-sm font-medium text-white">
+               {featuredPhoto.caption ?? "Featured vehicle image"}
+             </p>
+           </div>
+         </div>
+       ) : (
+         <div className="flex min-h-72 items-center justify-center border border-dashed border-slate-700 text-sm text-slate-500">
+           Upload a featured photo to make this vehicle visual.
+         </div>
+       )}
+     </section>
+
      {vehicle.notes && (
        <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
          <p className="text-sm text-slate-300">{vehicle.notes}</p>
        </section>
      )}
+
+     <PhotoGallery
+       vehicleId={vehicle.id}
+       publicSlug={vehicle.publicSlug}
+       isPublic={vehicle.isPublic}
+       featuredPhotoId={vehicle.featuredPhotoId}
+       photos={vehicle.photos}
+       modifications={vehicle.modifications}
+       maintenanceRecords={vehicle.maintenanceHistory}
+     />
 
      <section>
        <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-slate-400">

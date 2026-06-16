@@ -1,5 +1,8 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -17,6 +20,14 @@ const maintenanceCategories = [
   "Fluids",
   "Other",
 ] satisfies MaintenanceCategory[];
+
+const allowedImageTypes = new Map([
+  ["image/jpeg", "jpg"],
+  ["image/png", "png"],
+  ["image/webp", "webp"],
+  ["image/gif", "gif"],
+]);
+const maxPhotoSize = 6 * 1024 * 1024;
 
 type VehicleInput = {
   nickname: string | null;
@@ -52,6 +63,7 @@ type ModificationInput = {
   category: string;
   manufacturer: string | null;
   productName: string | null;
+  productUrl: string | null;
   installedAt: Date;
   mileage: number;
   cost: number | null;
@@ -120,7 +132,12 @@ export async function createMaintenanceRecord(vehicleId: string, formData: FormD
   const user = await requireUser();
   const vehicle = await prisma.vehicle.findFirst({
     where: { id: vehicleId, garage: { userId: user.sub } },
-    select: { id: true, garage: { select: { unitSystem: true } } },
+    select: {
+      id: true,
+      publicSlug: true,
+      featuredPhotoId: true,
+      garage: { select: { unitSystem: true } },
+    },
   });
 
   if (!vehicle) {
@@ -130,12 +147,21 @@ export async function createMaintenanceRecord(vehicleId: string, formData: FormD
   const isMetric = vehicle.garage.unitSystem === UnitSystem.Metric;
   const input = parseMaintenanceRecordInput(formData);
 
-  await prisma.maintenanceRecord.create({
+  const record = await prisma.maintenanceRecord.create({
     data: {
       vehicleId,
       ...input,
       mileage: inputMileageToKm(input.mileage, isMetric),
     },
+    select: { id: true },
+  });
+
+  await createOptionalEventPhoto({
+    formData,
+    vehicleId,
+    publicSlug: vehicle.publicSlug,
+    featuredPhotoId: vehicle.featuredPhotoId,
+    maintenanceRecordId: record.id,
   });
 
   revalidatePath("/garage");
@@ -151,7 +177,13 @@ export async function updateMaintenanceRecord(recordId: string, formData: FormDa
     select: {
       id: true,
       vehicleId: true,
-      vehicle: { select: { garage: { select: { unitSystem: true } } } },
+      vehicle: {
+        select: {
+          publicSlug: true,
+          featuredPhotoId: true,
+          garage: { select: { unitSystem: true } },
+        },
+      },
     },
   });
 
@@ -168,6 +200,14 @@ export async function updateMaintenanceRecord(recordId: string, formData: FormDa
       ...input,
       mileage: inputMileageToKm(input.mileage, isMetric),
     },
+  });
+
+  await createOptionalEventPhoto({
+    formData,
+    vehicleId: record.vehicleId,
+    publicSlug: record.vehicle.publicSlug,
+    featuredPhotoId: record.vehicle.featuredPhotoId,
+    maintenanceRecordId: record.id,
   });
 
   revalidatePath("/garage");
@@ -197,7 +237,12 @@ export async function createModification(vehicleId: string, formData: FormData) 
   const user = await requireUser();
   const vehicle = await prisma.vehicle.findFirst({
     where: { id: vehicleId, garage: { userId: user.sub } },
-    select: { id: true, garage: { select: { unitSystem: true } } },
+    select: {
+      id: true,
+      publicSlug: true,
+      featuredPhotoId: true,
+      garage: { select: { unitSystem: true } },
+    },
   });
 
   if (!vehicle) {
@@ -207,12 +252,21 @@ export async function createModification(vehicleId: string, formData: FormData) 
   const isMetric = vehicle.garage.unitSystem === UnitSystem.Metric;
   const input = parseModificationInput(formData);
 
-  await prisma.modification.create({
+  const modification = await prisma.modification.create({
     data: {
       vehicleId,
       ...input,
       mileage: inputMileageToKm(input.mileage, isMetric),
     },
+    select: { id: true },
+  });
+
+  await createOptionalEventPhoto({
+    formData,
+    vehicleId,
+    publicSlug: vehicle.publicSlug,
+    featuredPhotoId: vehicle.featuredPhotoId,
+    modificationId: modification.id,
   });
 
   revalidatePath("/garage");
@@ -228,7 +282,13 @@ export async function updateModification(modificationId: string, formData: FormD
     select: {
       id: true,
       vehicleId: true,
-      vehicle: { select: { garage: { select: { unitSystem: true } } } },
+      vehicle: {
+        select: {
+          publicSlug: true,
+          featuredPhotoId: true,
+          garage: { select: { unitSystem: true } },
+        },
+      },
     },
   });
 
@@ -245,6 +305,14 @@ export async function updateModification(modificationId: string, formData: FormD
       ...input,
       mileage: inputMileageToKm(input.mileage, isMetric),
     },
+  });
+
+  await createOptionalEventPhoto({
+    formData,
+    vehicleId: modification.vehicleId,
+    publicSlug: modification.vehicle.publicSlug,
+    featuredPhotoId: modification.vehicle.featuredPhotoId,
+    modificationId: modification.id,
   });
 
   revalidatePath("/garage");
@@ -268,6 +336,130 @@ export async function deleteModification(modificationId: string) {
 
   revalidatePath("/garage");
   revalidatePath(`/vehicle/${modification.vehicleId}`);
+}
+
+export async function uploadVehiclePhoto(vehicleId: string, formData: FormData) {
+  const user = await requireUser();
+  const vehicle = await prisma.vehicle.findFirst({
+    where: { id: vehicleId, garage: { userId: user.sub } },
+    select: {
+      id: true,
+      publicSlug: true,
+      featuredPhotoId: true,
+    },
+  });
+
+  if (!vehicle) {
+    throw new Error("Vehicle not found.");
+  }
+
+  const file = parsePhotoFile(formData);
+  const caption = parseOptionalString(formData, "caption");
+  const photo = await createPhoto({
+    file,
+    vehicleId,
+    caption,
+    isGallery: true,
+  });
+
+  if (!vehicle.featuredPhotoId || formData.get("makeFeatured") === "on") {
+    await prisma.vehicle.update({
+      where: { id: vehicleId },
+      data: { featuredPhotoId: photo.id },
+    });
+  }
+
+  revalidateVehicleSurfaces(vehicleId, vehicle.publicSlug);
+}
+
+export async function setFeaturedVehiclePhoto(vehicleId: string, photoId: string) {
+  const user = await requireUser();
+  const photo = await prisma.photo.findFirst({
+    where: {
+      id: photoId,
+      vehicleId,
+      isGallery: true,
+      vehicle: { garage: { userId: user.sub } },
+    },
+    select: { vehicle: { select: { publicSlug: true } } },
+  });
+
+  if (!photo) {
+    throw new Error("Photo not found.");
+  }
+
+  await prisma.vehicle.update({
+    where: { id: vehicleId },
+    data: { featuredPhotoId: photoId },
+  });
+
+  revalidateVehicleSurfaces(vehicleId, photo.vehicle.publicSlug);
+}
+
+export async function deleteVehiclePhoto(photoId: string) {
+  const user = await requireUser();
+  const photo = await prisma.photo.findFirst({
+    where: { id: photoId, vehicle: { garage: { userId: user.sub } } },
+    select: {
+      id: true,
+      vehicleId: true,
+      storagePath: true,
+      vehicle: {
+        select: {
+          featuredPhotoId: true,
+          publicSlug: true,
+          photos: {
+            where: { isGallery: true, NOT: { id: photoId } },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: { id: true },
+          },
+        },
+      },
+    },
+  });
+
+  if (!photo) {
+    throw new Error("Photo not found.");
+  }
+
+  await prisma.photo.delete({
+    where: { id: photoId },
+  });
+
+  if (photo.vehicle.featuredPhotoId === photoId) {
+    await prisma.vehicle.update({
+      where: { id: photo.vehicleId },
+      data: { featuredPhotoId: photo.vehicle.photos[0]?.id ?? null },
+    });
+  }
+
+  try {
+    await unlink(photo.storagePath);
+  } catch {
+    // The database row is the source of truth; a missing local file should not block deletion.
+  }
+
+  revalidateVehicleSurfaces(photo.vehicleId, photo.vehicle.publicSlug);
+}
+
+export async function updateVehicleVisibility(vehicleId: string, formData: FormData) {
+  const user = await requireUser();
+  const vehicle = await prisma.vehicle.findFirst({
+    where: { id: vehicleId, garage: { userId: user.sub } },
+    select: { id: true, publicSlug: true },
+  });
+
+  if (!vehicle) {
+    throw new Error("Vehicle not found.");
+  }
+
+  await prisma.vehicle.update({
+    where: { id: vehicleId },
+    data: { isPublic: formData.get("isPublic") === "on" },
+  });
+
+  revalidateVehicleSurfaces(vehicleId, vehicle.publicSlug);
 }
 
 export async function updateGarageUnitSystem(formData: FormData) {
@@ -369,11 +561,32 @@ function parseModificationInput(formData: FormData): ModificationInput {
     category: parseString(formData, "category", { required: true }),
     manufacturer: parseOptionalString(formData, "manufacturer"),
     productName: parseOptionalString(formData, "productName"),
+    productUrl: parseOptionalUrl(formData, "productUrl"),
     installedAt: parsePastOrTodayDate(formData, "installedAt"),
     mileage: parseInteger(formData, "mileage", { min: 0 }),
     cost: parseOptionalPositiveFloat(formData, "cost"),
     notes: parseOptionalString(formData, "notes"),
   };
+}
+
+function parsePhotoFile(formData: FormData) {
+  const file = formData.get("photo");
+
+  if (!(file instanceof File) || file.size === 0) {
+    throw new Error("Choose a photo to upload.");
+  }
+
+  return file;
+}
+
+function parseOptionalPhotoFile(formData: FormData) {
+  const file = formData.get("photo");
+
+  if (!(file instanceof File) || file.size === 0) {
+    return null;
+  }
+
+  return file;
 }
 
 function parseString(
@@ -399,6 +612,28 @@ function parseString(
 function parseOptionalString(formData: FormData, field: string) {
   const value = parseString(formData, field);
   return value ? value : null;
+}
+
+function parseOptionalUrl(formData: FormData, field: string) {
+  const value = parseOptionalString(formData, field);
+
+  if (!value) {
+    return null;
+  }
+
+  let parsedUrl: URL;
+
+  try {
+    parsedUrl = new URL(value);
+  } catch {
+    throw new Error(`${field} must be a valid URL.`);
+  }
+
+  if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+    throw new Error(`${field} must start with http:// or https://.`);
+  }
+
+  return parsedUrl.toString();
 }
 
 function parseOptionalRegistrationNumber(formData: FormData) {
@@ -539,3 +774,98 @@ function parsePastOrTodayDate(formData: FormData, field: string) {
   return parsedValue;
 }
 
+async function createOptionalEventPhoto({
+  formData,
+  vehicleId,
+  publicSlug,
+  featuredPhotoId,
+  modificationId = null,
+  maintenanceRecordId = null,
+}: {
+  formData: FormData;
+  vehicleId: string;
+  publicSlug: string;
+  featuredPhotoId: string | null;
+  modificationId?: string | null;
+  maintenanceRecordId?: string | null;
+}) {
+  const file = parseOptionalPhotoFile(formData);
+
+  if (!file) {
+    return;
+  }
+
+  const isGallery = formData.get("addPhotoToGallery") === "on";
+  const photo = await createPhoto({
+    file,
+    vehicleId,
+    modificationId,
+    maintenanceRecordId,
+    caption: parseOptionalString(formData, "photoCaption"),
+    isGallery,
+  });
+
+  if (isGallery && !featuredPhotoId) {
+    await prisma.vehicle.update({
+      where: { id: vehicleId },
+      data: { featuredPhotoId: photo.id },
+    });
+  }
+
+  revalidateVehicleSurfaces(vehicleId, publicSlug);
+}
+
+async function createPhoto({
+  file,
+  vehicleId,
+  modificationId = null,
+  maintenanceRecordId = null,
+  caption,
+  isGallery,
+}: {
+  file: File;
+  vehicleId: string;
+  modificationId?: string | null;
+  maintenanceRecordId?: string | null;
+  caption: string | null;
+  isGallery: boolean;
+}) {
+  const extension = allowedImageTypes.get(file.type);
+  if (!extension) {
+    throw new Error("Photos must be JPG, PNG, WEBP, or GIF images.");
+  }
+
+  if (file.size > maxPhotoSize) {
+    throw new Error("Photos must be 6 MB or smaller.");
+  }
+
+  const uploadDirectory = path.join(process.cwd(), "public", "uploads", "vehicles", vehicleId);
+  await mkdir(uploadDirectory, { recursive: true });
+
+  const storedFileName = `${Date.now()}-${randomUUID()}.${extension}`;
+  const storagePath = path.join(uploadDirectory, storedFileName);
+  const bytes = Buffer.from(await file.arrayBuffer());
+  await writeFile(storagePath, bytes);
+
+  return prisma.photo.create({
+    data: {
+      vehicleId,
+      modificationId,
+      maintenanceRecordId,
+      url: `/uploads/vehicles/${vehicleId}/${storedFileName}`,
+      storagePath,
+      fileName: file.name || storedFileName,
+      contentType: file.type,
+      size: file.size,
+      caption,
+      isGallery,
+    },
+    select: { id: true },
+  });
+}
+
+function revalidateVehicleSurfaces(vehicleId: string, publicSlug: string) {
+  revalidatePath("/garage");
+  revalidatePath(`/vehicle/${vehicleId}`);
+  revalidatePath(`/build/${publicSlug}`);
+}

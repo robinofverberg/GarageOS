@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useState, useTransition } from "react";
 import type { ReactNode } from "react";
 import {
@@ -474,6 +475,21 @@ function MaintenanceRecordCard({
             <p className="text-sm text-slate-400">{formatDate(record.date)}</p>
           </div>
           {record.notes && <p className="mt-3 text-sm text-slate-400">{record.notes}</p>}
+          {record.photos.length > 0 && (
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {record.photos.slice(0, 4).map((photo) => (
+                <div key={photo.id} className="relative aspect-[4/3] overflow-hidden rounded-lg bg-slate-950">
+                  <Image
+                    src={photo.url}
+                    alt={photo.caption ?? record.title}
+                    fill
+                    sizes="160px"
+                    className="object-cover"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               type="button"
@@ -593,6 +609,43 @@ function MaintenanceFields({
           />
         </Field>
       </div>
+
+      <div className="sm:col-span-2">
+        <EventPhotoFields idPrefix={fieldId("photo", record)} />
+      </div>
+    </div>
+  );
+}
+
+function EventPhotoFields({ idPrefix }: { idPrefix: string }) {
+  return (
+    <div className="space-y-4 rounded-lg border border-slate-800 bg-slate-950 p-4">
+      <Field label="Event Photo" htmlFor={`${idPrefix}-file`}>
+        <input
+          id={`${idPrefix}-file`}
+          name="photo"
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          className={fileInputClass}
+        />
+      </Field>
+      <Field label="Photo Caption" htmlFor={`${idPrefix}-caption`}>
+        <input
+          id={`${idPrefix}-caption`}
+          name="photoCaption"
+          type="text"
+          placeholder="e.g. Old filter and fresh oil"
+          className={inputClass}
+        />
+      </Field>
+      <label className="inline-flex items-center gap-2 text-sm text-slate-300">
+        <input
+          type="checkbox"
+          name="addPhotoToGallery"
+          className="h-4 w-4 rounded border-slate-700 bg-slate-950"
+        />
+        Add this photo to the public gallery
+      </label>
     </div>
   );
 }
@@ -767,6 +820,9 @@ function timelineId(type: "record" | "modification", id: string) {
 
 const inputClass =
   "w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500";
+
+const fileInputClass =
+  "w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-700 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-slate-600 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500";
 
 const selectClass =
   "w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500";

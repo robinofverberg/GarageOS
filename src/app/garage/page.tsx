@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { getGarageOverview } from "@/lib/garage-data";
 import { displayMileage } from "@/lib/units";
 import { requireUser } from "@/lib/session";
@@ -35,29 +36,46 @@ export default async function GaragePage() {
               <Link
                 key={vehicle.id}
                 href={`/vehicle/${vehicle.id}`}
-                className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 p-5 transition hover:border-slate-700 hover:bg-slate-800"
+                className="flex items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-900 p-4 transition hover:border-slate-700 hover:bg-slate-800"
               >
-                <div>
-                  <p className="font-semibold text-white">
-                    {vehicle.nickname ? (
-                      <>
-                        {vehicle.nickname}
-                        <span className="ml-2 text-sm font-normal text-slate-400">
+                <div className="flex min-w-0 items-center gap-4">
+                  <div className="relative h-20 w-28 shrink-0 overflow-hidden rounded-lg bg-slate-950">
+                    {vehicle.featuredPhoto ? (
+                      <Image
+                        src={vehicle.featuredPhoto.url}
+                        alt={vehicle.featuredPhoto.caption ?? `${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+                        fill
+                        sizes="112px"
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-xs text-slate-600">
+                        No photo
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-white">
+                      {vehicle.nickname ? (
+                        <>
+                          {vehicle.nickname}
+                          <span className="ml-2 text-sm font-normal text-slate-400">
+                            {vehicle.year} {vehicle.make} {vehicle.model}
+                            {vehicle.trim ? ` ${vehicle.trim}` : ""}
+                          </span>
+                        </>
+                      ) : (
+                        <>
                           {vehicle.year} {vehicle.make} {vehicle.model}
                           {vehicle.trim ? ` ${vehicle.trim}` : ""}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        {vehicle.year} {vehicle.make} {vehicle.model}
-                        {vehicle.trim ? ` ${vehicle.trim}` : ""}
-                      </>
-                    )}
-                  </p>
-                  <p className="mt-1 text-sm text-slate-400">
-                    {vehicle.color ? `${vehicle.color} - ` : ""}
-                    {displayMileage(vehicle.mileage, isMetric).toLocaleString()} {mileageLabel}
-                  </p>
+                        </>
+                      )}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-400">
+                      {vehicle.color ? `${vehicle.color} - ` : ""}
+                      {displayMileage(vehicle.mileage, isMetric).toLocaleString()} {mileageLabel}
+                    </p>
+                  </div>
                 </div>
                 <div className="text-right text-sm text-slate-400">
                   <p>

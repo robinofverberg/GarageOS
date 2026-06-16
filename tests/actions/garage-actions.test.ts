@@ -167,6 +167,7 @@ describe("garage server actions", () => {
         cost: 129.99,
         notes: "Passed without remarks.",
       },
+      select: { id: true },
     });
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/garage");
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/vehicle/vehicle_1");
