@@ -2,10 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { supabase, newId, now } from "@/lib/supabase";
 import { requireUser } from "@/lib/session";
-import { BodyType, UnitSystem } from "@prisma/client";
-import type { MaintenanceCategory } from "@prisma/client";
+import { BodyType, UnitSystem, MaintenanceCategory } from "@/lib/garage-data";
 import { inputMileageToKm } from "@/lib/units";
 
 const maintenanceCategories = [
@@ -61,19 +60,28 @@ type ModificationInput = {
 export async function createVehicle(formData: FormData) {
   const user = await requireUser();
   const garageId = await getPrimaryGarageId(user.sub);
-  const garage = await prisma.garage.findUnique({
-    where: { id: garageId },
-    select: { unitSystem: true },
-  });
+  const { data: garage } = await supabase
+    .from("Garage")
+    .select("unitSystem")
+    .eq("id", garageId)
+    .maybeSingle();
   const isMetric = garage?.unitSystem === UnitSystem.Metric;
   const input = parseVehicleInput(formData);
-  const vehicle = await prisma.vehicle.create({
-    data: {
+  const { data: vehicle, error } = await supabase
+    .from("Vehicle")
+    .insert({
+      id: newId(),
       garageId,
       ...input,
       mileage: inputMileageToKm(input.mileage, isMetric),
-    },
-  });
+      updatedAt: now(),
+    })
+    .select("id")
+    .single();
+
+  if (error || !vehicle) {
+    throw new Error("Could not create vehicle.");
+  }
 
   revalidatePath("/garage");
   revalidatePath(`/vehicle/${vehicle.id}`);
@@ -83,20 +91,28 @@ export async function createVehicle(formData: FormData) {
 
 export async function updateVehicle(vehicleId: string, formData: FormData) {
   const user = await requireUser();
-  const existing = await prisma.vehicle.findFirst({
-    where: { id: vehicleId, garage: { userId: user.sub } },
-    select: { garage: { select: { unitSystem: true } } },
-  });
+  const { data: existing } = await supabase
+    .from("Vehicle")
+    .select("id, Garage!inner(unitSystem, userId)")
+    .eq("id", vehicleId)
+    .eq("Garage.userId", user.sub)
+    .maybeSingle();
   if (!existing) {
     throw new Error("Vehicle not found.");
   }
-  const isMetric = existing.garage.unitSystem === UnitSystem.Metric;
+  const isMetric =
+    (existing.Garage as unknown as { unitSystem: UnitSystem }).unitSystem ===
+    UnitSystem.Metric;
   const input = parseVehicleInput(formData);
 
-  await prisma.vehicle.update({
-    where: { id: vehicleId },
-    data: { ...input, mileage: inputMileageToKm(input.mileage, isMetric) },
-  });
+  await supabase
+    .from("Vehicle")
+    .update({
+      ...input,
+      mileage: inputMileageToKm(input.mileage, isMetric),
+      updatedAt: now(),
+    })
+    .eq("id", vehicleId);
 
   revalidatePath("/garage");
   revalidatePath(`/vehicle/${vehicleId}`);
@@ -107,9 +123,16 @@ export async function updateVehicle(vehicleId: string, formData: FormData) {
 
 export async function deleteVehicle(vehicleId: string) {
   const user = await requireUser();
-  await prisma.vehicle.deleteMany({
-    where: { id: vehicleId, garage: { userId: user.sub } },
-  });
+  const { data: existing } = await supabase
+    .from("Vehicle")
+    .select("id, Garage!inner(userId)")
+    .eq("id", vehicleId)
+    .eq("Garage.userId", user.sub)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase.from("Vehicle").delete().eq("id", vehicleId);
+  }
 
   revalidatePath("/garage");
 
@@ -118,24 +141,21 @@ export async function deleteVehicle(vehicleId: string) {
 
 export async function createMaintenanceRecord(vehicleId: string, formData: FormData) {
   const user = await requireUser();
-  const vehicle = await prisma.vehicle.findFirst({
-    where: { id: vehicleId, garage: { userId: user.sub } },
-    select: { id: true, garage: { select: { unitSystem: true } } },
-  });
+  const vehicle = await findOwnedVehicleUnitSystem(vehicleId, user.sub);
 
   if (!vehicle) {
     throw new Error("Vehicle not found.");
   }
 
-  const isMetric = vehicle.garage.unitSystem === UnitSystem.Metric;
+  const isMetric = vehicle.unitSystem === UnitSystem.Metric;
   const input = parseMaintenanceRecordInput(formData);
 
-  await prisma.maintenanceRecord.create({
-    data: {
-      vehicleId,
-      ...input,
-      mileage: inputMileageToKm(input.mileage, isMetric),
-    },
+  await supabase.from("MaintenanceRecord").insert({
+    id: newId(),
+    vehicleId,
+    ...input,
+    mileage: inputMileageToKm(input.mileage, isMetric),
+    updatedAt: now(),
   });
 
   revalidatePath("/garage");
@@ -146,29 +166,28 @@ export async function createMaintenanceRecord(vehicleId: string, formData: FormD
 
 export async function updateMaintenanceRecord(recordId: string, formData: FormData) {
   const user = await requireUser();
-  const record = await prisma.maintenanceRecord.findFirst({
-    where: { id: recordId, vehicle: { garage: { userId: user.sub } } },
-    select: {
-      id: true,
-      vehicleId: true,
-      vehicle: { select: { garage: { select: { unitSystem: true } } } },
-    },
-  });
+  const { data: record } = await supabase
+    .from("MaintenanceRecord")
+    .select("id, vehicleId, Vehicle!inner(Garage!inner(unitSystem, userId))")
+    .eq("id", recordId)
+    .eq("Vehicle.Garage.userId", user.sub)
+    .maybeSingle();
 
   if (!record) {
     throw new Error("Maintenance record not found.");
   }
 
-  const isMetric = record.vehicle.garage.unitSystem === UnitSystem.Metric;
+  const isMetric = nestedUnitSystem(record) === UnitSystem.Metric;
   const input = parseMaintenanceRecordInput(formData);
 
-  await prisma.maintenanceRecord.update({
-    where: { id: recordId },
-    data: {
+  await supabase
+    .from("MaintenanceRecord")
+    .update({
       ...input,
       mileage: inputMileageToKm(input.mileage, isMetric),
-    },
-  });
+      updatedAt: now(),
+    })
+    .eq("id", recordId);
 
   revalidatePath("/garage");
   revalidatePath(`/vehicle/${record.vehicleId}`);
@@ -176,18 +195,18 @@ export async function updateMaintenanceRecord(recordId: string, formData: FormDa
 
 export async function deleteMaintenanceRecord(recordId: string) {
   const user = await requireUser();
-  const record = await prisma.maintenanceRecord.findFirst({
-    where: { id: recordId, vehicle: { garage: { userId: user.sub } } },
-    select: { vehicleId: true },
-  });
+  const { data: record } = await supabase
+    .from("MaintenanceRecord")
+    .select("vehicleId, Vehicle!inner(Garage!inner(userId))")
+    .eq("id", recordId)
+    .eq("Vehicle.Garage.userId", user.sub)
+    .maybeSingle();
 
   if (!record) {
     throw new Error("Maintenance record not found.");
   }
 
-  await prisma.maintenanceRecord.delete({
-    where: { id: recordId },
-  });
+  await supabase.from("MaintenanceRecord").delete().eq("id", recordId);
 
   revalidatePath("/garage");
   revalidatePath(`/vehicle/${record.vehicleId}`);
@@ -195,24 +214,21 @@ export async function deleteMaintenanceRecord(recordId: string) {
 
 export async function createModification(vehicleId: string, formData: FormData) {
   const user = await requireUser();
-  const vehicle = await prisma.vehicle.findFirst({
-    where: { id: vehicleId, garage: { userId: user.sub } },
-    select: { id: true, garage: { select: { unitSystem: true } } },
-  });
+  const vehicle = await findOwnedVehicleUnitSystem(vehicleId, user.sub);
 
   if (!vehicle) {
     throw new Error("Vehicle not found.");
   }
 
-  const isMetric = vehicle.garage.unitSystem === UnitSystem.Metric;
+  const isMetric = vehicle.unitSystem === UnitSystem.Metric;
   const input = parseModificationInput(formData);
 
-  await prisma.modification.create({
-    data: {
-      vehicleId,
-      ...input,
-      mileage: inputMileageToKm(input.mileage, isMetric),
-    },
+  await supabase.from("Modification").insert({
+    id: newId(),
+    vehicleId,
+    ...input,
+    mileage: inputMileageToKm(input.mileage, isMetric),
+    updatedAt: now(),
   });
 
   revalidatePath("/garage");
@@ -223,29 +239,28 @@ export async function createModification(vehicleId: string, formData: FormData) 
 
 export async function updateModification(modificationId: string, formData: FormData) {
   const user = await requireUser();
-  const modification = await prisma.modification.findFirst({
-    where: { id: modificationId, vehicle: { garage: { userId: user.sub } } },
-    select: {
-      id: true,
-      vehicleId: true,
-      vehicle: { select: { garage: { select: { unitSystem: true } } } },
-    },
-  });
+  const { data: modification } = await supabase
+    .from("Modification")
+    .select("id, vehicleId, Vehicle!inner(Garage!inner(unitSystem, userId))")
+    .eq("id", modificationId)
+    .eq("Vehicle.Garage.userId", user.sub)
+    .maybeSingle();
 
   if (!modification) {
     throw new Error("Modification not found.");
   }
 
-  const isMetric = modification.vehicle.garage.unitSystem === UnitSystem.Metric;
+  const isMetric = nestedUnitSystem(modification) === UnitSystem.Metric;
   const input = parseModificationInput(formData);
 
-  await prisma.modification.update({
-    where: { id: modificationId },
-    data: {
+  await supabase
+    .from("Modification")
+    .update({
       ...input,
       mileage: inputMileageToKm(input.mileage, isMetric),
-    },
-  });
+      updatedAt: now(),
+    })
+    .eq("id", modificationId);
 
   revalidatePath("/garage");
   revalidatePath(`/vehicle/${modification.vehicleId}`);
@@ -253,18 +268,18 @@ export async function updateModification(modificationId: string, formData: FormD
 
 export async function deleteModification(modificationId: string) {
   const user = await requireUser();
-  const modification = await prisma.modification.findFirst({
-    where: { id: modificationId, vehicle: { garage: { userId: user.sub } } },
-    select: { vehicleId: true },
-  });
+  const { data: modification } = await supabase
+    .from("Modification")
+    .select("vehicleId, Vehicle!inner(Garage!inner(userId))")
+    .eq("id", modificationId)
+    .eq("Vehicle.Garage.userId", user.sub)
+    .maybeSingle();
 
   if (!modification) {
     throw new Error("Modification not found.");
   }
 
-  await prisma.modification.delete({
-    where: { id: modificationId },
-  });
+  await supabase.from("Modification").delete().eq("id", modificationId);
 
   revalidatePath("/garage");
   revalidatePath(`/vehicle/${modification.vehicleId}`);
@@ -278,27 +293,29 @@ export async function updateGarageUnitSystem(formData: FormData) {
     throw new Error("Invalid unit system.");
   }
 
-  const garage = await prisma.garage.findFirst({
-    where: { userId: user.sub },
-    select: { id: true },
-    orderBy: { createdAt: "asc" },
-  });
+  const { data: garage } = await supabase
+    .from("Garage")
+    .select("id")
+    .eq("userId", user.sub)
+    .order("createdAt", { ascending: true })
+    .limit(1)
+    .maybeSingle();
 
   if (!garage) {
-    await prisma.garage.create({
-      data: {
-        userId: user.sub,
-        slug: user.sub,
-        name: "My Garage",
-        description: "My GarageOS garage.",
-        unitSystem: value as UnitSystem,
-      },
+    await supabase.from("Garage").insert({
+      id: newId(),
+      userId: user.sub,
+      slug: user.sub,
+      name: "My Garage",
+      description: "My GarageOS garage.",
+      unitSystem: value as UnitSystem,
+      updatedAt: now(),
     });
   } else {
-    await prisma.garage.update({
-      where: { id: garage.id },
-      data: { unitSystem: value as UnitSystem },
-    });
+    await supabase
+      .from("Garage")
+      .update({ unitSystem: value as UnitSystem, updatedAt: now() })
+      .eq("id", garage.id as string);
   }
 
   revalidatePath("/garage");
@@ -307,27 +324,62 @@ export async function updateGarageUnitSystem(formData: FormData) {
 }
 
 async function getPrimaryGarageId(userId: string): Promise<string> {
-  const existingGarage = await prisma.garage.findFirst({
-    where: { userId },
-    select: { id: true },
-    orderBy: { createdAt: "asc" },
-  });
+  const { data: existingGarage } = await supabase
+    .from("Garage")
+    .select("id")
+    .eq("userId", userId)
+    .order("createdAt", { ascending: true })
+    .limit(1)
+    .maybeSingle();
 
   if (existingGarage) {
-    return existingGarage.id;
+    return existingGarage.id as string;
   }
 
-  const garage = await prisma.garage.create({
-    data: {
-      userId,
-      slug: userId,
-      name: "My Garage",
-      description: "My GarageOS garage.",
-    },
-    select: { id: true },
+  const id = newId();
+  const { error } = await supabase.from("Garage").insert({
+    id,
+    userId,
+    slug: userId,
+    name: "My Garage",
+    description: "My GarageOS garage.",
+    updatedAt: now(),
   });
 
-  return garage.id;
+  if (error) {
+    throw new Error("Could not create garage.");
+  }
+
+  return id;
+}
+
+/** Loads a vehicle's garage unit system, scoped to the owning user. */
+async function findOwnedVehicleUnitSystem(
+  vehicleId: string,
+  userId: string
+): Promise<{ unitSystem: UnitSystem } | null> {
+  const { data } = await supabase
+    .from("Vehicle")
+    .select("id, Garage!inner(unitSystem, userId)")
+    .eq("id", vehicleId)
+    .eq("Garage.userId", userId)
+    .maybeSingle();
+
+  if (!data) {
+    return null;
+  }
+
+  return {
+    unitSystem: (data.Garage as unknown as { unitSystem: UnitSystem }).unitSystem,
+  };
+}
+
+/** Extracts unitSystem from a Modification/MaintenanceRecord -> Vehicle -> Garage join. */
+function nestedUnitSystem(row: {
+  Vehicle: unknown;
+}): UnitSystem {
+  const vehicle = row.Vehicle as { Garage: { unitSystem: UnitSystem } };
+  return vehicle.Garage.unitSystem;
 }
 
 function parseVehicleInput(formData: FormData): VehicleInput {

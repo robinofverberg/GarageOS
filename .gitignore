@@ -36,6 +36,10 @@ yarn-error.log*
 .env*
 !.env.test.example
 
+# supabase (CLI local cache — keep migrations tracked)
+supabase/.temp/
+supabase/.branches/
+
 # vercel
 .vercel
 
